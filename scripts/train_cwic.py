@@ -85,9 +85,11 @@ if not save_ckpts:
 # ye been warned!
 # our runs were trained with 128 batch size across devices but doing more would be awesome
 
+# activation/gradient checkpointing is also broken rn, a PR would be welcome!
+
 checkpoint, est_p_count, grad_batch_dim_per_proc = [
-    ("unsloth/Llama-3.2-1B-Instruct", 1000000000, 1),
-    ("unsloth/Llama-3.2-3B-Instruct", 3000000000, 8),
+    ("unsloth/Llama-3.2-1B-Instruct", 1000000000, 4),
+    ("unsloth/Llama-3.2-3B-Instruct", 3000000000, 4),
 ][0]
 grad_batch_dim_per_proc *= jax.local_device_count()
 
