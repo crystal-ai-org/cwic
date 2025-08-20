@@ -307,9 +307,10 @@ class CWICDense(nnx.Module):
             else:
                 y = jnp.einsum(
                     "... i n, i n q -> ... n q",
-                    z,
+                    # mean preservation: add the mean levelset
+                    z + mu[...,None] if self.train_mode else z,
                     rearrange(
-                        self.W.kernel.value, "i (stripes q) -> i stripes q", stripes=z.shape[-1]
+                        Wkernel, "i (stripes q) -> i stripes q", stripes=z.shape[-1]
                     ),
                     preferred_element_type=z.dtype,
                     precision=self.precision,
@@ -317,7 +318,7 @@ class CWICDense(nnx.Module):
                 y = rearrange(y, "... n q -> ... (n q)")
 
             # mean preservation: add the mean levelset
-            y = y + (mu @ Wkernel if self.train_mode else out_mu_computed)
+            y = y if self.train_mode else y + out_mu_computed
             y = y[..., : self.out_slice]
 
             my_flops = self.out_features * occupance.sum(-1)
