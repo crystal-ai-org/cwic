@@ -91,7 +91,7 @@ checkpoint, est_p_count, grad_batch_dim_per_proc = [
 ][0]
 grad_batch_dim_per_proc *= jax.local_device_count()
 
-dataset_name = "crystal-ai/chat-compilation-Llama-3.2-Instruct-Shuffled"
+dataset_name = "crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled"
 
 
 
