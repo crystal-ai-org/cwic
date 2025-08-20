@@ -106,10 +106,9 @@ def main():
             add_generation_prompt=False,
             return_tensors="pt",
         ).to("cuda:0")
-        with torch.no_grad():
-            out = pipe.model(
-                input_ids=input_ids
-            )
+        out = pipe.model(
+            input_ids=input_ids
+        )
 
         input_ids = input_ids[0].detach().cpu().numpy()
         flops = (out.active_parameters)[0].detach().cpu().numpy()

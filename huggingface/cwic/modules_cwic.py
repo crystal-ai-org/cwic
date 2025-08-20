@@ -33,7 +33,7 @@ class DistributionTracker(nn.Module):
         self,
         x,
     ):
-        if torch.is_grad_enabled():
+        if self.training:
             # broadcast where_vals to x shape
             assert x.shape[-1] == self.hidden_size
 
@@ -181,7 +181,7 @@ class CWICLinear(nn.Module):
         mask = (
             xgate > thresh
         ).to(x.dtype)
-        if torch.is_grad_enabled():
+        if self.training:
             bw=std[None, None, :]*0.1
 
             kernel = F.hardsigmoid(3*(xgate-thresh)/bw)
@@ -280,7 +280,7 @@ class CWICMLP(nn.Module):
             zgate > thresh
         ).to(z.dtype)
 
-        if torch.is_grad_enabled():
+        if self.training:
             bw=std[None, None, :]*0.1
 
             kernel = F.hardsigmoid(3*(zgate-thresh)/bw)
