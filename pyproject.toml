@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "cwic"
+version = "0.1.0"
+description = ""
+authors = [
+    "Cyris Kissane <cyris@crystalai.org>",
+    "Adam Klein <adam@crystalai.org>",
+    "Niveditha Iyer <niveditha@crystalai.org>",
+]
+readme = "README.md"
+packages = [
+    { include = "model_code", from = "." },
+    { include = "scripts", from = "." },
+]
+
+[tool.poetry.dependencies]
+python = ">=3.12.0,<3.13"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 99
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

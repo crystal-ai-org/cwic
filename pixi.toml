@@ -1,0 +1,45 @@
+[project]
+name = "cwic"
+version = "0.1.0"
+authors = [
+    "Cyris Kissane <cyris@crystalai.org>",
+    "Adam Klein <adam@crystalai.org>",
+    "Niveditha Iyer <niveditha@crystalai.org>"]
+description = ""
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[pypi-dependencies]
+flax = { git = "https://github.com/google/flax.git" }
+optax = "*"
+orbax-checkpoint = "*"
+chex = "*"
+wandb = "*"
+datasets = "*"
+transformers = "*"
+gcsfs = "*"
+jinja2 = "*"
+fastapi = "*"
+nltk = "*"
+matplotlib = "*"
+wandb-core = "*"
+jaxtyping = "*"
+scikit-learn = "*"
+tensorflow-datasets = "*"
+pre-commit = "*"
+black = "*"
+isort = "*"
+flake8 = "*"
+autoflake = "*"
+docformatter = "*"
+pyright = "*"
+jax = "*"
+jaxlib = "*"
+torch = "*"
+torchvision = "*"
+einops = "*"
+cwic = { path = ".", editable = true }
+
+[dependencies]
+python = "==3.12"
