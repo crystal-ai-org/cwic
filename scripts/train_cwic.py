@@ -814,7 +814,7 @@ run = wandb.init(
     config=run_config,
     resume="allow",
     # id=train_run_state["wandb_run_id"],
-    tags=[checkpoint, dataset_name] + run_tags,
+    tags=run_tags,
     notes=args.notes,
 )
 train_run_state["wandb_run_id"] = run.id
