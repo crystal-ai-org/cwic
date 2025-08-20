@@ -1124,12 +1124,12 @@ with mesh:
                     print(name, strr)
                 if aux_infer is not None:
                     aux[f"generation/table"] = table
-            if mngr is not None:
-                mngr.wait_until_finished()
-            aux = {
-                **aux,
-                "seen_tokens/assistant": train_run_state["seen_tokens/assistant"],
-                "seen_tokens/other": train_run_state["seen_tokens/other"],
-                "seen_tokens/combined": train_run_state["seen_tokens/combined"],
-            }
-            run.log(aux)
+        if mngr is not None:
+            mngr.wait_until_finished()
+        aux = {
+            **aux,
+            "seen_tokens/assistant": train_run_state["seen_tokens/assistant"],
+            "seen_tokens/other": train_run_state["seen_tokens/other"],
+            "seen_tokens/combined": train_run_state["seen_tokens/combined"],
+        }
+        run.log(aux)
