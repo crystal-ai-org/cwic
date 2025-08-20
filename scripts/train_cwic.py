@@ -312,22 +312,20 @@ def copy_from_hf(teacher_model):  # The model's state, a pure pytree.
     )
 
 
-jax.debug.visualize_array_sharding(teacher_model.lm_head.kernel.value)
-
 print("PRE TEACHER<HF")
-print("array_sharding(teacher_model.lm_head.kernel.value)")
-jax.debug.visualize_array_sharding(teacher_model.lm_head.kernel.value)
-print("array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])")
-jax.debug.visualize_array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])
+# print("array_sharding(teacher_model.lm_head.kernel.value)")
+# jax.debug.visualize_array_sharding(teacher_model.lm_head.kernel.value)
+# print("array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])")
+# jax.debug.visualize_array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])
 
 with mesh:
     copy_from_hf(teacher_model)
 
 print("POST TEACHER<HF")
-print("array_sharding(teacher_model.lm_head.kernel.value)")
-jax.debug.visualize_array_sharding(teacher_model.lm_head.kernel.value)
-print("array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])")
-jax.debug.visualize_array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])
+# print("array_sharding(teacher_model.lm_head.kernel.value)")
+# jax.debug.visualize_array_sharding(teacher_model.lm_head.kernel.value)
+# print("array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])")
+# jax.debug.visualize_array_sharding(teacher_model.h.blocks.attention.wq.kernel.value[0])
 
 
 @nnx.jit
@@ -386,20 +384,20 @@ def transfer(student_model, teacher_model):
 
 
 print("PRE STUDENT<TEACHER")
-print("array_sharding(student_model.lm_head.W.kernel.value)")
-jax.debug.visualize_array_sharding(student_model.lm_head.W.kernel.value)
-print("array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])")
-jax.debug.visualize_array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])
+# print("array_sharding(student_model.lm_head.W.kernel.value)")
+# jax.debug.visualize_array_sharding(student_model.lm_head.W.kernel.value)
+# print("array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])")
+# jax.debug.visualize_array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])
 
 with mesh:
     student_model = transfer(student_model, teacher_model)
 print("POST STUDENT<TEACHER")
 
-print("array_sharding(student_model.lm_head.W.kernel.value)")
-jax.debug.visualize_array_sharding(student_model.lm_head.W.kernel.value)
-print("array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])")
-jax.debug.visualize_array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])
-print("done making a model.")
+# print("array_sharding(student_model.lm_head.W.kernel.value)")
+# jax.debug.visualize_array_sharding(student_model.lm_head.W.kernel.value)
+# print("array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])")
+# jax.debug.visualize_array_sharding(student_model.h.blocks.attention.wqkv_i.W.kernel.value[0])
+# print("done making a model.")
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 
@@ -418,9 +416,9 @@ def do_inference(messages):
 
     bos_token_id = tokenizer.bos_token_id
     eos_token_id = tokenizer.eos_token_id
-    new_infer_tok_count = 1024
+    new_infer_tok_count = 128
     max_len = len(token_id_list) + new_infer_tok_count
-    max_len = 16  # 256  # 2048  # 2**int(math.ceil(math.log2(max_len-1)))+
+    max_len = 256  # 256  # 2048  # 2**int(math.ceil(math.log2(max_len-1)))+
     if i_model.h.blocks.attention.cache_index is None:
         i_model.init_cache((1, max_len - 1, 1))
     else:
@@ -471,13 +469,13 @@ def do_inference(messages):
     return messages + [{"role": "assistant", "content": strr, "flopSpans": new_tok_list_flops}]
 
 
-print("-=-")
-print("CI BEFORE", student_model.h.blocks.attention.cache_index)
-print("-=-")
-print(do_inference([{"role": "user", "content": "Hi"}])[-1])
-print("-=-")
-print("CI AFTER", student_model.h.blocks.attention.cache_index)
-print("-=-")
+# print("-=-")
+# print("CI BEFORE", student_model.h.blocks.attention.cache_index)
+# print("-=-")
+# print(do_inference([{"role": "user", "content": "Hi"}])[-1])
+# print("-=-")
+# print("CI AFTER", student_model.h.blocks.attention.cache_index)
+# print("-=-")
 
 # vocab params
 bos_token_id = tokenizer.bos_token_id
@@ -819,290 +817,285 @@ run = wandb.init(
 )
 train_run_state["wandb_run_id"] = run.id
 
-tkey = jax.random.key(7)
-train_random_key, data_key = jax.random.split(tkey)
-last_diff = 0.0
+train_random_key, data_key = jax.random.split(jax.random.key(7))
 
-initted = True  # train_run_state["batch_index"] > 0
+initted = train_run_state["batch_index"] > 0
 
 with mesh:
-    while True:
+    prog = tqdm.tqdm(
+        data_generator(data_key, dataset_name, state_dict=data_state),
+        initial=train_run_state["batch_index"],
+    )
 
-        prog = tqdm.tqdm(
-            data_generator(data_key, dataset_name, state_dict=data_state),
-            initial=train_run_state["batch_index"],
-        )
+    vis_batch = None
+    for batch, data_state in prog:
+        if vis_batch is None:
+            vis_batch = jax.tree.map(lambda x: x[:grad_batch_dim], batch)
 
-        val_batch = None
-        for batch, data_state in prog:
-            if val_batch is None:
-                val_batch = jax.tree.map(lambda x: x[:grad_batch_dim], batch)
+        loss_disc = None
+        aux_discrete = None
+        data_sharding = NamedSharding(mesh, PartitionSpec("dp", None))
 
-            loss_disc = None
-            aux_discrete = None
-            data_sharding = NamedSharding(mesh, PartitionSpec("dp", None))
+        loss, aux = -1.0, {}
 
-            loss, aux = -1.0, {}
-
-            for no_opt in [False]:
-                aves = {}
-                pad_sum = 0
-                gen_sum = 0
-                for rp in range(grad_accums):
-                    batch1 = jax.tree.map(
-                        lambda x: x[rp * grad_batch_dim : (rp + 1) * grad_batch_dim], batch
-                    )
-                    batch2 = jax.tree.map(
-                        lambda x: jax.device_put(jnp.array(x), data_sharding), batch1
-                    )
-                    # print("IN BATCH SHARDING")
-                    # jax.debug.visualize_array_sharding(batch2[0])
-                    
-
-                    # print("OUT LOGIT SHARDING")
-                    # jax.debug.visualize_array_sharding(t_logits[...,0])
-                    res = train_step(
-                        teacher_model,
-                        student_model,
-                        optimizer,
-                        batch2,
-                        train_run_state["batch_index"],
-                        key=train_random_key,
-                        no_opt=no_opt,
-                        init_mode=not initted,
-                    )
-                    input_ids, segment_ids, pad_mask, gen_mask = batch1
-                    addpad = int(pad_mask.sum())
-                    pad_sum += addpad
-
-                    addgen = int((pad_mask & gen_mask).sum())
-                    gen_sum += addgen
-                    initted = True
-                    if rp == 0:
-                        aves = dict(res[1])
-                        aves["flop_ratios/combinedi"] = 1 / aves["flop_ratios/combined"] * addpad
-                        aves[LossKeys.LOGITS_TEMP_1] = float(aves[LossKeys.LOGITS_TEMP_1]) * addgen
-                        aves[LossKeys.LOGITS_TWOWAY] = float(aves[LossKeys.LOGITS_TWOWAY]) * addpad
-                        aves["kd_loss/combined"] = float(aves["kd_loss/combined"]) * addpad
-                    else:
-                        aux = res[1]
-                        aves["flop_ratios/combinedi"] += 1 / aux["flop_ratios/combined"] * addpad
-                        aves[LossKeys.LOGITS_TEMP_1] += float(aux[LossKeys.LOGITS_TEMP_1]) * addgen
-                        aves[LossKeys.LOGITS_TWOWAY] += float(aux[LossKeys.LOGITS_TWOWAY]) * addpad
-                        aves["kd_loss/combined"] += float(aux["kd_loss/combined"]) * addpad
-                    if rp == grad_accums - 1:
-                        loss, aux = res
-                        aux["flop_ratios/combined"] = 1 / (aves["flop_ratios/combinedi"] / pad_sum)
-                        aux[LossKeys.LOGITS_TEMP_1] = aves[LossKeys.LOGITS_TEMP_1] / gen_sum
-                        aux[LossKeys.LOGITS_TWOWAY] = aves[LossKeys.LOGITS_TWOWAY] / pad_sum
-                        aux["kd_loss/combined"] = aves["kd_loss/combined"] / pad_sum
-
-            student_model.clamp_thresholds()
-            metric_kl = aux[LossKeys.LOGITS_TEMP_1]
-
-            train_run_state["seen_tokens/combined"] += int(jnp.sum(batch[2]))
-            train_run_state["seen_tokens/assistant"] += int(jnp.sum(batch[3]))
-            train_run_state["seen_tokens/other"] += int(jnp.sum(batch[2])) - int(jnp.sum(batch[3]))
-            per_param_flop_ratios = {}
-            per_param_flop_ratios["flop_ratios/lm_head"] = float(
-                student_model.lm_head.flop_ratio_trace.value
+        aves = {}
+        pad_sum = 0
+        gen_sum = 0
+        for rp in range(grad_accums):
+            batch1 = jax.tree.map(
+                lambda x: x[rp * grad_batch_dim : (rp + 1) * grad_batch_dim], batch
             )
-            for ii in range(config.num_hidden_layers):
-                per_param_flop_ratios[f"flop_ratios/qkv_{ii:03d}"] = float(
-                    student_model.h.blocks.attention.wqkv_i.flop_ratio_trace.value[ii]
-                )
-                per_param_flop_ratios[f"flop_ratios/o_{ii:03d}"] = float(
-                    student_model.h.blocks.attention.wo_i.flop_ratio_trace.value[ii]
-                )
-                per_param_flop_ratios[f"flop_ratios/ffn_gate_{ii:03d}"] = float(
-                    student_model.h.blocks.feed_forward.ffn_i.gate.flop_ratio_trace.value[ii]
-                )
-                per_param_flop_ratios[f"flop_ratios/ffn_{ii:03d}"] = float(
-                    student_model.h.blocks.feed_forward.ffn_i.flop_ratio_trace.value[ii]
-                )
-            aux = {**aux, **per_param_flop_ratios}
-            aux.pop(LossKeys.FLOPS_CWIC)
-            aux.pop(LossKeys.FLOPS_BASE)
+            batch2 = jax.tree.map(
+                lambda x: jax.device_put(jnp.array(x), data_sharding), batch1
+            )
+            # print("IN BATCH SHARDING")
+            # jax.debug.visualize_array_sharding(batch2[0])
+            
 
-            if HIST_INTERVAL == True or (
-                HIST_INTERVAL != False and train_run_state["batch_index"] % HIST_INTERVAL == 0
-            ):
-                val_batch = jax.tree.map(lambda x: jax.device_put(x, data_sharding), val_batch)
-                _, aux_val = train_step(
-                    teacher_model,
-                    student_model,
-                    optimizer,
-                    val_batch,
-                    train_run_state["batch_index"],
-                    key=train_random_key,
-                    no_opt=True,
-                )
-                for ii in [0, 12]:
-                    if student_model.h.blocks.attention.wqkv_i.hist_trace is not None:
-                        aux[f"trees/qkv_{ii:03d}"] = wandb.Image(
-                            np.array(
-                                student_model.h.blocks.attention.wqkv_i.hist_trace.value[ii] * 255
-                            ),
-                            "L",
-                        )
-                    if student_model.h.blocks.attention.wo_i.hist_trace is not None:
-                        aux[f"trees/o_{ii:03d}"] = wandb.Image(
-                            np.array(
-                                student_model.h.blocks.attention.wo_i.hist_trace.value[ii] * 255
-                            ),
-                            "L",
-                        )
+            # print("OUT LOGIT SHARDING")
+            # jax.debug.visualize_array_sharding(t_logits[...,0])
+            res = train_step(
+                teacher_model,
+                student_model,
+                optimizer,
+                batch2,
+                train_run_state["batch_index"],
+                key=train_random_key,
+                no_opt=False,
+                init_mode=not initted,
+            )
+            input_ids, segment_ids, pad_mask, gen_mask = batch1
+            addpad = int(pad_mask.sum())
+            pad_sum += addpad
 
-                    if student_model.h.blocks.feed_forward.ffn_i.gate.hist_trace is not None:
-                        aux[f"trees/ffn_gate_{ii:03d}"] = wandb.Image(
-                            np.array(
-                                student_model.h.blocks.feed_forward.ffn_i.gate.hist_trace.value[ii]
-                                * 255
-                            ),
-                            "L",
-                        )
-                    if student_model.h.blocks.feed_forward.ffn_i.hist_trace is not None:
-                        aux[f"trees/ffn_{ii:03d}"] = wandb.Image(
-                            np.array(
-                                student_model.h.blocks.feed_forward.ffn_i.hist_trace.value[ii]
-                                * 255
-                            ),
-                            "L",
-                        )
-                if student_model.h.blocks.attention.wo_i.hist_trace is not None:
-                    aux[f"trees/o_{6:03d}"] = wandb.Image(
-                        np.array(student_model.h.blocks.attention.wo_i.hist_trace.value[6] * 255),
+            addgen = int((pad_mask & gen_mask).sum())
+            gen_sum += addgen
+            initted = True
+            if rp == 0:
+                aves = dict(res[1])
+                aves["flop_ratios/combinedi"] = 1 / aves["flop_ratios/combined"] * addpad
+                aves[LossKeys.LOGITS_TEMP_1] = float(aves[LossKeys.LOGITS_TEMP_1]) * addgen
+                aves[LossKeys.LOGITS_TWOWAY] = float(aves[LossKeys.LOGITS_TWOWAY]) * addpad
+                aves["kd_loss/combined"] = float(aves["kd_loss/combined"]) * addpad
+            else:
+                aux = res[1]
+                aves["flop_ratios/combinedi"] += 1 / aux["flop_ratios/combined"] * addpad
+                aves[LossKeys.LOGITS_TEMP_1] += float(aux[LossKeys.LOGITS_TEMP_1]) * addgen
+                aves[LossKeys.LOGITS_TWOWAY] += float(aux[LossKeys.LOGITS_TWOWAY]) * addpad
+                aves["kd_loss/combined"] += float(aux["kd_loss/combined"]) * addpad
+            if rp == grad_accums - 1:
+                loss, aux = res
+                aux["flop_ratios/combined"] = 1 / (aves["flop_ratios/combinedi"] / pad_sum)
+                aux[LossKeys.LOGITS_TEMP_1] = aves[LossKeys.LOGITS_TEMP_1] / gen_sum
+                aux[LossKeys.LOGITS_TWOWAY] = aves[LossKeys.LOGITS_TWOWAY] / pad_sum
+                aux["kd_loss/combined"] = aves["kd_loss/combined"] / pad_sum
+
+        student_model.clamp_thresholds()
+        metric_kl = aux[LossKeys.LOGITS_TEMP_1]
+
+        train_run_state["seen_tokens/combined"] += int(jnp.sum(batch[2]))
+        train_run_state["seen_tokens/assistant"] += int(jnp.sum(batch[3]))
+        train_run_state["seen_tokens/other"] += int(jnp.sum(batch[2])) - int(jnp.sum(batch[3]))
+        per_param_flop_ratios = {}
+        per_param_flop_ratios["flop_ratios/lm_head"] = float(
+            student_model.lm_head.flop_ratio_trace.value
+        )
+        for ii in range(config.num_hidden_layers):
+            per_param_flop_ratios[f"flop_ratios/qkv_{ii:03d}"] = float(
+                student_model.h.blocks.attention.wqkv_i.flop_ratio_trace.value[ii]
+            )
+            per_param_flop_ratios[f"flop_ratios/o_{ii:03d}"] = float(
+                student_model.h.blocks.attention.wo_i.flop_ratio_trace.value[ii]
+            )
+            per_param_flop_ratios[f"flop_ratios/ffn_gate_{ii:03d}"] = float(
+                student_model.h.blocks.feed_forward.ffn_i.gate.flop_ratio_trace.value[ii]
+            )
+            per_param_flop_ratios[f"flop_ratios/ffn_{ii:03d}"] = float(
+                student_model.h.blocks.feed_forward.ffn_i.flop_ratio_trace.value[ii]
+            )
+        aux = {**aux, **per_param_flop_ratios}
+        aux.pop(LossKeys.FLOPS_CWIC)
+        aux.pop(LossKeys.FLOPS_BASE)
+
+        if HIST_INTERVAL == True or (
+            HIST_INTERVAL != False and train_run_state["batch_index"] % HIST_INTERVAL == 0
+        ):
+            vis_batch = jax.tree.map(lambda x: jax.device_put(x, data_sharding), vis_batch)
+            _, aux_val = train_step(
+                teacher_model,
+                student_model,
+                optimizer,
+                vis_batch,
+                train_run_state["batch_index"],
+                key=train_random_key,
+                no_opt=True,
+            )
+            for ii in [0, 12]:
+                if student_model.h.blocks.attention.wqkv_i.hist_trace is not None:
+                    aux[f"trees/qkv_{ii:03d}"] = wandb.Image(
+                        np.array(
+                            student_model.h.blocks.attention.wqkv_i.hist_trace.value[ii] * 255
+                        ),
                         "L",
                     )
-                if student_model.lm_head.hist_trace is not None:
-                    aux["trees/lm_head"] = wandb.Image(
-                        np.array(student_model.lm_head.hist_trace.value * 255), "L"
+                if student_model.h.blocks.attention.wo_i.hist_trace is not None:
+                    aux[f"trees/o_{ii:03d}"] = wandb.Image(
+                        np.array(
+                            student_model.h.blocks.attention.wo_i.hist_trace.value[ii] * 255
+                        ),
+                        "L",
                     )
 
-            prog.set_description_str(
-                f"loss: {loss},temp1:{aux[LossKeys.LOGITS_TEMP_1]},fr:{aux["flop_ratios/combined"]}",
-                refresh=False,
-            )
-            # prog.set_postfix(aux)
-
-            train_run_state["batch_index"] += 1
-
-            if train_run_state["batch_index"] % ((128 * 500) // batch_dim) == 0 and (mngr is not None):
-                _, state = nnx.split(student_model)
-                # The RNG key had to be convert to int to allow checkpoint saving
-                rngs_key = jax.tree.map(jax.random.key_data, state.filter(nnx.RngKey))
-
-                def merge_state(dst: nnx.State, src: nnx.State):
-                    for k, v in src.items():
-                        if isinstance(v, nnx.State):
-                            merge_state(dst[k], v)
-                        else:
-                            dst[k] = v
-
-                merge_state(state, rngs_key)
-
-                _, opt_state = nnx.split(optimizer.opt_state)
-
-                mngr.save(
-                    train_run_state["batch_index"],
-                    args=ocp.args.Composite(
-                        model=ocp.args.StandardSave(  # pyright: ignore[reportCallIssue]
-                            jax.tree.map(np.array, state)  # pyright: ignore[reportCallIssue]
+                if student_model.h.blocks.feed_forward.ffn_i.gate.hist_trace is not None:
+                    aux[f"trees/ffn_gate_{ii:03d}"] = wandb.Image(
+                        np.array(
+                            student_model.h.blocks.feed_forward.ffn_i.gate.hist_trace.value[ii]
+                            * 255
                         ),
-                        data_state=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
-                            data_state  # pyright: ignore[reportCallIssue]
+                        "L",
+                    )
+                if student_model.h.blocks.feed_forward.ffn_i.hist_trace is not None:
+                    aux[f"trees/ffn_{ii:03d}"] = wandb.Image(
+                        np.array(
+                            student_model.h.blocks.feed_forward.ffn_i.hist_trace.value[ii]
+                            * 255
                         ),
-                        run_config=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
-                            run_config  # pyright: ignore[reportCallIssue]
-                        ),
-                        train_run_state=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
-                            train_run_state  # pyright: ignore[reportCallIssue]
-                        ),
-                        optimizer=ocp.args.StandardSave(  # pyright: ignore[reportCallIssue]
-                            jax.tree.map(np.array, opt_state)  # pyright: ignore[reportCallIssue]
-                        ),
-                    ),
+                        "L",
+                    )
+            if student_model.h.blocks.attention.wo_i.hist_trace is not None:
+                aux[f"trees/o_{6:03d}"] = wandb.Image(
+                    np.array(student_model.h.blocks.attention.wo_i.hist_trace.value[6] * 255),
+                    "L",
                 )
-                del state
-                del opt_state
-                del rngs_key
-                print("Saved a checkpoint.")
-            if train_run_state["batch_index"] % TEST_INTERVAL == 0:
+            if student_model.lm_head.hist_trace is not None:
+                aux["trees/lm_head"] = wandb.Image(
+                    np.array(student_model.lm_head.hist_trace.value * 255), "L"
+                )
 
-                # print(do_inference([{"role": "user", "content": "Hi! What is Halftone?"}])[-1])
-                import html
+        prog.set_description_str(
+            f"loss: {loss},temp1:{aux[LossKeys.LOGITS_TEMP_1]},fr:{aux["flop_ratios/combined"]}",
+            refresh=False,
+        )
+        # prog.set_postfix(aux)
 
-                new_infer_tok_count = 256
+        train_run_state["batch_index"] += 1
 
-                table = wandb.Table(columns=["Model", "Generation"])
-                aux_infer = None
-                for li, name in enumerate(["teacher", "student"]):
-                    if name == "teacher":
-                        continue
-                    token_id_list: List[int] = list(
-                        tokenizer.apply_chat_template(
-                            [
-                                # {
-                                #     "role": "system",
-                                #     "content": "You are a friendly AI model that formats replies in markdown.",
-                                # },
-                                {
-                                    "role": "user",
-                                    "content": """Find the slope of a line through (5, 8) and (9, 9)""",
-                                },
-                            ],
-                            add_generation_prompt=True,
-                            tokenize=True,
-                        )
-                    )  # type: ignore
+        if train_run_state["batch_index"] % ((128 * 500) // batch_dim) == 0 and (mngr is not None):
+            _, state = nnx.split(student_model)
+            # The RNG key had to be convert to int to allow checkpoint saving
+            rngs_key = jax.tree.map(jax.random.key_data, state.filter(nnx.RngKey))
 
-                    max_len = len(token_id_list) + new_infer_tok_count
-                    for mm in range(len(token_id_list), max_len):
-                        eos_pad_count = max_len - 1 - len(token_id_list)
-                        toks = jnp.array([token_id_list + [eos_token_id] * eos_pad_count])
-                        logits, aux_infer = infer_nnx_model(
-                            [teacher_model, student_model][li],
-                            toks,
-                            jnp.zeros_like(toks),
-                            jnp.ones_like(toks).astype(jnp.bool),
-                            jnp.cumsum(jnp.ones_like(toks), axis=-1) - 1,
-                            jax.random.key(0),
-                        )
-                        new_token = int(jnp.argmax(logits[:, :], axis=-1)[0][mm - 1])
+            def merge_state(dst: nnx.State, src: nnx.State):
+                for k, v in src.items():
+                    if isinstance(v, nnx.State):
+                        merge_state(dst[k], v)
+                    else:
+                        dst[k] = v
 
-                        token_id_list.append(new_token)
-                    strr = tokenizer.decode(token_id_list)
-                    if name == "student":
-                        assert aux_infer is not None
-                        colors = np.array(
+            merge_state(state, rngs_key)
+
+            _, opt_state = nnx.split(optimizer.opt_state)
+
+            mngr.save(
+                train_run_state["batch_index"],
+                args=ocp.args.Composite(
+                    model=ocp.args.StandardSave(  # pyright: ignore[reportCallIssue]
+                        jax.tree.map(np.array, state)  # pyright: ignore[reportCallIssue]
+                    ),
+                    data_state=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
+                        data_state  # pyright: ignore[reportCallIssue]
+                    ),
+                    run_config=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
+                        run_config  # pyright: ignore[reportCallIssue]
+                    ),
+                    train_run_state=ocp.args.JsonSave(  # pyright: ignore[reportCallIssue]
+                        train_run_state  # pyright: ignore[reportCallIssue]
+                    ),
+                    optimizer=ocp.args.StandardSave(  # pyright: ignore[reportCallIssue]
+                        jax.tree.map(np.array, opt_state)  # pyright: ignore[reportCallIssue]
+                    ),
+                ),
+            )
+            del state
+            del opt_state
+            del rngs_key
+            print("Saved a checkpoint.")
+        if train_run_state["batch_index"] % TEST_INTERVAL == 0:
+
+            # print(do_inference([{"role": "user", "content": "Hi! What is Halftone?"}])[-1])
+            import html
+
+            new_infer_tok_count = 256
+
+            table = wandb.Table(columns=["Model", "Generation"])
+            aux_infer = None
+            for li, name in enumerate(["teacher", "student"]):
+                if name == "teacher":
+                    continue
+                token_id_list: List[int] = list(
+                    tokenizer.apply_chat_template(
+                        [
+                            # {
+                            #     "role": "system",
+                            #     "content": "You are a friendly AI model that formats replies in markdown.",
+                            # },
+                            {
+                                "role": "user",
+                                "content": """Find the slope of a line through (5, 8) and (9, 9)""",
+                            },
+                        ],
+                        add_generation_prompt=True,
+                        tokenize=True,
+                    )
+                )  # type: ignore
+
+                max_len = len(token_id_list) + new_infer_tok_count
+                for mm in range(len(token_id_list), max_len):
+                    eos_pad_count = max_len - 1 - len(token_id_list)
+                    toks = jnp.array([token_id_list + [eos_token_id] * eos_pad_count])
+                    logits, aux_infer = infer_nnx_model(
+                        [teacher_model, student_model][li],
+                        toks,
+                        jnp.zeros_like(toks),
+                        jnp.ones_like(toks).astype(jnp.bool),
+                        jnp.cumsum(jnp.ones_like(toks), axis=-1) - 1,
+                        jax.random.key(0),
+                    )
+                    new_token = int(jnp.argmax(logits[:, :], axis=-1)[0][mm - 1])
+
+                    token_id_list.append(new_token)
+                strr = tokenizer.decode(token_id_list)
+                if name == "student":
+                    assert aux_infer is not None
+                    colors = np.array(
+                        (
                             (
-                                (
-                                    aux_infer[LossKeys.FLOPS_CWIC]
-                                    / np.mean(aux_infer[LossKeys.FLOPS_CWIC])
-                                ).ravel()
-                            )
+                                aux_infer[LossKeys.FLOPS_CWIC]
+                                / np.mean(aux_infer[LossKeys.FLOPS_CWIC])
+                            ).ravel()
                         )
-                        mc = np.array(
+                    )
+                    mc = np.array(
+                        (
                             (
-                                (
-                                    aux_infer[LossKeys.FLOPS_CWIC] / aux_infer[LossKeys.FLOPS_BASE]
-                                ).ravel()
-                            )
-                        ).tolist()
-                        colors = np.log10(colors)
-                        colors = colors - colors.mean()
-                        colors = colors / (np.std(colors) + 0.0001) * 0.5
-                        colors = np.argsort(np.argsort(colors)) / colors.shape[0]
-                        colors = colors.tolist()
+                                aux_infer[LossKeys.FLOPS_CWIC] / aux_infer[LossKeys.FLOPS_BASE]
+                            ).ravel()
+                        )
+                    ).tolist()
+                    colors = np.log10(colors)
+                    colors = colors - colors.mean()
+                    colors = colors / (np.std(colors) + 0.0001) * 0.5
+                    colors = np.argsort(np.argsort(colors)) / colors.shape[0]
+                    colors = colors.tolist()
 
-                        def get_color(c, a):
-                            c = c + 0.5
-                            return f"rgba(0,0,0,{a})"
+                    def get_color(c, a):
+                        c = c + 0.5
+                        return f"rgba(0,0,0,{a})"
 
-                        aux[f"generation/rich"] = wandb.Html(
-                            """<link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">"""
+                    aux[f"generation/rich"] = wandb.Html(
+                        """<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">"""
                             + "<pre>"
                             + "".join(
                                 [
@@ -1118,13 +1111,13 @@ with mesh:
                                 ]
                             )
                             + "</pre>"
-                        )
+                    )
 
-                        table.add_data(
-                            name + "_token_decodes",
-                            json.dumps([tokenizer.decode([m]) for m in token_id_list]),
-                        )
-                        table.add_data(name + "_flop_ratios", json.dumps(mc))
+                    table.add_data(
+                        name + "_token_decodes",
+                        json.dumps([tokenizer.decode([m]) for m in token_id_list]),
+                    )
+                    table.add_data(name + "_flop_ratios", json.dumps(mc))
                     table.add_data(name, strr)
                     print(name, strr)
                 if aux_infer is not None:
