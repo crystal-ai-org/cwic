@@ -6,6 +6,83 @@ from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
 
 
+class DistributionTracker(nn.Module):
+
+    def __init__(
+        self,
+        hidden_size,
+        quantile_bs: int = 4,
+        upper_quantile: float = 0.841,
+        beta: float = 0.99,
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.quantile_bs = quantile_bs
+        self.upper_quantile = upper_quantile
+
+        self.register_buffer("beta",torch.tensor(beta, dtype=torch.float32))
+        self.register_buffer("steps",torch.zeros((), dtype=torch.float32))
+
+        self.register_buffer("med",torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("upp",torch.zeros((hidden_size,), dtype=torch.float32))
+
+        self.register_buffer("adj_med_computed",torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("adj_std_computed",torch.zeros((hidden_size,), dtype=torch.float32))
+
+    def __call__(
+        self,
+        x,
+    ):
+        if torch.is_grad_enabled():
+            # broadcast where_vals to x shape
+            assert x.shape[-1] == self.hidden_size
+
+            # reduce batch size
+            x = x[: self.quantile_bs]
+
+            # reshape batched vectors
+            x = x.reshape(-1, self.hidden_size).float()
+
+            # get x distribution
+            new_med = torch.median(x, 0).values.detach()
+            new_upp = torch.quantile(x, self.upper_quantile, 0).detach()
+
+            # calculate update size
+            delta = 1.0
+            beta = self.beta**delta
+
+            # calculate new values
+            med = beta * self.med + (1.0 - beta) * new_med
+            upp = beta * self.upp + (1.0 - beta) * new_upp
+
+            old_med = self.med.clone()
+            old_upp = self.upp.clone()
+            old_steps = self.steps.clone()
+
+            self.med = med
+            self.upp =upp
+            self.steps =self.steps + delta
+
+            trig = old_steps > 1.0
+            med = torch.where(trig, old_med, med)
+            upp = torch.where(trig, old_upp, upp)
+            steps = torch.where(trig, old_steps, self.steps)
+
+            # adjust for bias
+            div = 1 - self.beta**steps
+            adj_med = med / (div + 1e-7)
+            adj_upp = upp / (div + 1e-7)
+            adj_med, adj_std = (
+                (adj_med),
+                (adj_upp - adj_med +1e-7),
+            )
+            self.adj_med_computed, self.adj_std_computed = adj_med, adj_std
+
+        else:
+            adj_med, adj_std = self.adj_med_computed, self.adj_std_computed
+
+        return adj_med, adj_std
+    
 class CWICLinear(nn.Module):
 
     def __init__(
@@ -34,12 +111,7 @@ class CWICLinear(nn.Module):
                 torch.zeros(out_features)
             )
 
-        self.mu = nn.Parameter(
-            torch.zeros(in_features)
-        )
-        self.std = nn.Parameter(
-            torch.ones(in_features)
-        )
+        self.dist_tracker = DistributionTracker(in_features)
 
         self.thresholds = nn.Parameter(
             torch.zeros(self.num_stripes, self.in_features)
@@ -71,28 +143,28 @@ class CWICLinear(nn.Module):
 
         if torch.is_grad_enabled():
             self.cached_post_mu = None
-            return f(self.weight,self.mu)
+            return f(self.weight,self.dist_tracker.adj_med_computed)
         
         else:
             # Use cached weight during inference if available
             if self.cached_post_mu is None:
-                self.cached_post_mu = f(self.weight,self.mu).detach().contiguous()
+                self.cached_post_mu = f(self.weight,self.dist_tracker.adj_med_computed).detach().contiguous()
 
             return self.cached_post_mu
         
     
-    def _get_thresholds(self) -> torch.FloatTensor:
+    def _get_thresholds(self, std) -> torch.FloatTensor:
 
         f = lambda x, s: (x * s[None])[None]
 
         if torch.is_grad_enabled():
             self.cached_thresholds = None
-            return f(self.thresholds, self.std)
+            return f(self.thresholds, std)
         
         else:
             # Use cached weight during inference if available
             if self.cached_thresholds is None:
-                self.cached_thresholds = f(self.thresholds, self.std).detach().contiguous()
+                self.cached_thresholds = f(self.thresholds, std).detach().contiguous()
 
             return self.cached_thresholds
 
@@ -102,13 +174,22 @@ class CWICLinear(nn.Module):
         x: torch.FloatTensor
     ) -> tuple[torch.FloatTensor,tuple[torch.FloatTensor,torch.FloatTensor]]:
         og_shape = x.shape[:-1]
-
-        x = x.view(-1, 1, self.in_features) - self.mu[None, None, :]
+        mu, std = self.dist_tracker(x)
+        x = x.view(-1, 1, self.in_features) - mu[None, None, :]
+        xgate = x.abs()
+        thresh = self._get_thresholds(std)
         mask = (
-            x.abs() > self._get_thresholds()
+            xgate > thresh
         ).to(x.dtype)
         if torch.is_grad_enabled():
-            x = (x * mask) + self.mu[None, None, :]
+            bw=std[None, None, :]*0.1
+
+            kernel = F.hardsigmoid(3*(xgate-thresh)/bw)
+            mask = mask + (kernel -kernel.detach())
+            nog_kernel = F.hardsigmoid(3*(xgate.detach()-thresh)/bw)
+            grad_term = x + x.detach() * nog_kernel
+            x = (x * mask).detach() + (grad_term -grad_term.detach())
+            x = x + mu[None, None, :]
 
             y = torch.einsum(
                 "b n s i, b n i p -> b n s p",
@@ -168,6 +249,9 @@ class CWICMLP(nn.Module):
             bias
         )
 
+        self.dist_tracker = DistributionTracker(inter_features)
+        self.mad_tracker = DistributionTracker(inter_features)
+
         self.thresholds = nn.Parameter(
             torch.zeros(inter_features)
         )
@@ -185,12 +269,31 @@ class CWICMLP(nn.Module):
         z, (dense_parameters, active_parameters) = self.gate(x)
         z = self.act_fn(z)
 
+        zgate = z.abs()
+
+        _, std = self.dist_tracker(z)
+
+        mad, _ = self.mad_tracker(zgate)
+
+        thresh = self.thresholds[None] * mad
         mask = (
-            z.abs() > self.thresholds[None]
+            zgate > thresh
         ).to(z.dtype)
 
+        if torch.is_grad_enabled():
+            bw=std[None, None, :]*0.1
+
+            kernel = F.hardsigmoid(3*(zgate-thresh)/bw)
+            mask = mask + (kernel - kernel.detach())
+            nog_kernel = F.hardsigmoid(3*(zgate.detach()-thresh)/bw)
+            grad_term = z + z.detach() * nog_kernel
+            z = (z * mask).detach() + (grad_term -grad_term.detach())
+        else:
+            z = z * mask
+
+
         y = self.down(
-            self.up(x) * (z * mask)
+            self.up(x) * z
         ).view(*og_shape, -1)
 
         return y, (dense_parameters + (self.in_features + self.out_features) * self.inter_features,active_parameters + (self.in_features + self.out_features) * self.inter_features * mask.mean(-1).view(*og_shape))
