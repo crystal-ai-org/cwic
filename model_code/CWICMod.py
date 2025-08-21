@@ -23,7 +23,6 @@ from flax.typing import (
 )
 
 
-
 EPS = 1e-7
 
 USE_TRITON_KERNELS_IN_DECODING = False
@@ -237,7 +236,9 @@ class CWICDense(nnx.Module):
 
     def clamp_thresholds(self):
         max_shift = (
-            (self.bandwidth.value[..., None, None]) / self.threshold_learning_scale.value * self.threshold_shift_cap
+            (self.bandwidth.value[..., None, None])
+            / self.threshold_learning_scale.value
+            * self.threshold_shift_cap
         )
         self.thresholds.value = self.thresholds.value.at[:].set(
             jnp.clip(
@@ -256,7 +257,7 @@ class CWICDense(nnx.Module):
         if where is None:
             where = jnp.ones_like(x[..., 0]) > 0
 
-        mu, std = self.dist_tracker(x)
+        mu, std = self.dist_tracker(x, where)
         if self.train_mode:
             self.out_mu_computed.value = self.W(mu).astype(self.dtype)
 
@@ -308,10 +309,8 @@ class CWICDense(nnx.Module):
                 y = jnp.einsum(
                     "... i n, i n q -> ... n q",
                     # mean preservation: add the mean levelset
-                    z + mu[...,None] if self.train_mode else z,
-                    rearrange(
-                        Wkernel, "i (stripes q) -> i stripes q", stripes=z.shape[-1]
-                    ),
+                    z + mu[..., None] if self.train_mode else z,
+                    rearrange(Wkernel, "i (stripes q) -> i stripes q", stripes=z.shape[-1]),
                     preferred_element_type=z.dtype,
                     precision=self.precision,
                 )
@@ -325,11 +324,11 @@ class CWICDense(nnx.Module):
 
             in_bandwidth = hits.mean() if self.train_mode else 0.0
             if self.hist_trace is None:
-                occupance=None
+                occupance = None
 
-            return y, occupance,  my_flops, in_bandwidth
-        
-        y, occupance,  my_flops, in_bandwidth = remat_fn(
+            return y, occupance, my_flops, in_bandwidth
+
+        y, occupance, my_flops, in_bandwidth = remat_fn(
             thresholds, bandwidth, self.W.kernel.value, self.out_mu_computed.value, where
         )
         sparse_flops = my_flops
@@ -488,7 +487,9 @@ class CWICFFN(nnx.Module):
 
     def clamp_thresholds(self):
         max_shift = (
-            self.bandwidth.value[..., None]/ self.threshold_learning_scale.value  * self.threshold_shift_cap
+            self.bandwidth.value[..., None]
+            / self.threshold_learning_scale.value
+            * self.threshold_shift_cap
         )
         self.thresholds.value = self.thresholds.value.at[:].set(
             jnp.clip(
@@ -509,8 +510,8 @@ class CWICFFN(nnx.Module):
         check = jnp.abs(sil)
 
         # ONLY for scaling bandwidth
-        std = self.dist_tracker(sil)[1]
-        mad = self.mad_tracker(check)[0]
+        std = self.dist_tracker(sil, where)[1]
+        mad = self.mad_tracker(check, where)[0]
 
         thresholds = self.thresholds.value * self.threshold_learning_scale.value * mad
         bandwidth = jax.lax.stop_gradient(self.bandwidth.value[..., None] * std)
@@ -580,20 +581,25 @@ class DistributionTracker(nnx.Module):
     def __call__(
         self,
         x,
+        where,
     ):
         if self.train_mode:
             # broadcast where_vals to x shape
             assert x.shape[-1] == self.hidden_size
 
             # reduce batch size
-            x = x[: self.quantile_bs]
 
             # reshape batched vectors
             x = x.reshape(-1, self.hidden_size).astype(self.param_dtype)
 
             # get x distribution
-            new_med = jnp.median(x, 0)
-            new_upp = jnp.quantile(x, self.upper_quantile, 0)
+            new_med = jnp.mean(x, 0, where=where.reshape(-1, 1))
+            new_std = jnp.std(x, 0, where=where.reshape(-1, 1))
+            where2 = where.reshape(-1, 1) & (jnp.abs(x - new_med) < new_std * 2)
+            new_med = jnp.mean(x, 0, where=where2)
+            new_std = jnp.std(x, 0, where=where2)
+
+            new_upp = new_med + new_std
 
             # calculate update size
             delta = 1.0 if self.train_mode else 0.0
