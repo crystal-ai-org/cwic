@@ -12,7 +12,8 @@ from cwic.modelling_cwic import CWICForCausalLM
 import matplotlib as mpl
 
 OUTPUT_FOLDER = "./flop_diagrams"
-CHECKPOINT = "./torch_checkpoints/release_fr_6"
+# 3x active parameter reduction over Llama-3.1-1B-Instruct
+CHECKPOINT = "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct"
 
 from termcolor import colored, cprint
 
