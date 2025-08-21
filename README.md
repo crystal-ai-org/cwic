@@ -21,15 +21,21 @@ curl -fsSL https://pixi.sh/install.sh | sh
 source ~/.bashrc
 
 pixi shell
+```
 
-wandb login
-# gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
+## Inference
+```sh
+python cwic_scripts/chat_with_it.py
 ```
 
 ## Training
 ```sh
-python scripts/train_cwic.py
+wandb login
+# gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
+
+python cwic_scripts/train_cwic.py
 ```
+
 
 ## Background
 
