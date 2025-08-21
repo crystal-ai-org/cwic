@@ -38,6 +38,7 @@ jax = { version = "*", extras = ["cuda12"] }
 torch = "*"
 torchvision = "*"
 einops = "*"
+accelerate = "*"
 cwic = { path = ".", editable = true }
 
 [dependencies]

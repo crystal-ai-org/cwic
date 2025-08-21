@@ -9,20 +9,23 @@ from scipy.stats import norm
 from transformers import pipeline
 from cwic.modelling_cwic import CWICForCausalLM
 
+import matplotlib as mpl
 
 OUTPUT_FOLDER = "./flop_diagrams"
-CHECKPOINT = "./torch_checkpoints/release_fr_3"
+CHECKPOINT = "./torch_checkpoints/release_fr_6"
+
+from termcolor import colored, cprint
 
 
 def show_flops(tokenizer, input_ids, flops):
 
-    med, mx = np.median(flops), flops.max()
+    # med, mx = np.median(flops), flops.max()
 
-    colors = 3 * (flops - med) / (mx - med + 1e-7)
-    colors = norm.cdf(flops)
-    plt.plot(colors)
-    plt.savefig("color_debug.png")
-    plt.clf()
+    # colors = 3 * (flops - med) / (mx - med + 1e-7)
+    # colors = norm.cdf(colors)
+    # plt.plot(colors)
+    # plt.savefig("color_debug.png")
+    # plt.clf()
     # colors = flops / flops.max()
 
     # colors = flops / flops.mean()
@@ -31,17 +34,31 @@ def show_flops(tokenizer, input_ids, flops):
     # colors = 0.5 * colors / (np.std(colors) + 0.0001)
     # colors = np.argsort(np.argsort(colors)) / colors.shape[0]
     
+    colors = flops / flops.max()
     colors = colors.tolist()
+    def terminal_escape(x):
+        return x
     
+    cmap = mpl.colormaps['YlGnBu']
+    cmap_fn = lambda x: str(tuple(int(c* 255) for c in cmap(x*0.5)[:3]))
+    print("".join(
+            [
+                colored(terminal_escape(tokenizer.decode([m])),(0,0,0),tuple(int(c* 255) for c in cmap(x*0.5))[:3])
+                for m, x in zip(
+                    input_ids,
+                    [0.0] + colors[:-1],
+                )
+            ]
+        ))
     html = (
         """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">"""
-        + "<pre>"
+        + "<pre style=\"background:white;\">"
         + "".join(
             [
-                f'<span style="font-family: Inter;font-optical-sizing: auto;font-weight: {100+int(800*c):3d};font-style: normal;">{html_escape(tokenizer.decode([m]))}</span>'
+                f'<span style="font-family: Inter;font-optical-sizing: auto;font-weight: normal;font-style: normal; background-color: rgb{cmap_fn(c)};">{html_escape(tokenizer.decode([m]))}</span>'
                 for m, c in zip(
                     input_ids,
                     [0.0] + colors[:-1],
@@ -52,6 +69,8 @@ def show_flops(tokenizer, input_ids, flops):
     )
 
     return html
+
+
 
 
 def main():

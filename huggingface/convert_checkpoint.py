@@ -6,14 +6,15 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
+from transformers import AutoTokenizer
+
 from cwic.configuration_cwic import CWICConfig
 from cwic.modelling_cwic import CWICForCausalLM, CWICDecoderLayer
 from cwic.modules_cwic import CWICLinear, CWICMLP
 
-
-CHECKPOINT = "./checkpoints/release_fr_3"
+CHECKPOINT = "./checkpoints/release_fr_6"
 CONFIG = "./configs/llama_3-2_1B_Instruct.json"
-SAVE_PATH = "./torch_checkpoints/release_fr_3"
+SAVE_PATH = "./torch_checkpoints/release_fr_6"
 
 
 def load(param, x):
@@ -237,6 +238,7 @@ def main():
     print("Weights loaded!")
 
     model.save_pretrained(SAVE_PATH)
+    AutoTokenizer.from_pretrained("unsloth/Llama-3.2-1B-Instruct").save_pretrained(SAVE_PATH)
     print(f"Model saved to {SAVE_PATH}!")
 
     print("\n SUCCESS! \n")
