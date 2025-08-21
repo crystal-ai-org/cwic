@@ -13,6 +13,7 @@
 
 4. The CWIC architecture uses learned activation thresholds and expressive sparsity patterns to enable adaptive computation.
 
+Read more [on our blog](https://crystalai.org/blog/2025-08-18-compute-where-it-counts)!
 
 ## Installation
 ```sh
@@ -50,5 +51,5 @@ Most similar to our work are [CATS](https://arxiv.org/abs/2404.08763), [TEAL](ht
 
 3. Different parameters should have different sparsity levels. This insight was drawn from our own preliminary experiments. We found that, among other patterns, the Q attention matrix was more robust to sparsity than the K and V matrices. This shows a limitation in methods like [CATS](https://arxiv.org/abs/2404.08763) and [Q-Sparse](https://arxiv.org/abs/2407.10969) that use the same sparsity level for every parameter. Furthermore, while the sparsity level of each parameter could be manually tuned, we wanted to automate this by making sparsity thresholds learnable.
 
-{/* 4. Easier problems should require less compute. As discussed in [Dynamic Routing in MoE Models](https://arxiv.org/abs/2403.07652), it is intuitively obvious that some outputs should have simpler derivations, and therefore should need less compute. This is exemplified by [GPT-5](https://openai.com/index/introducing-gpt-5/), which routes some inputs to a less costly model. We wanted to see if a sparsely activated model could learn this behavior on its own. */}
+4. Easier problems should require less compute. As discussed in [Dynamic Routing in MoE Models](https://arxiv.org/abs/2403.07652), it is intuitively obvious that some outputs should have simpler derivations, and therefore should need less compute. This is exemplified by [GPT-5](https://openai.com/index/introducing-gpt-5/), which routes some inputs to a less costly model. We wanted to see if a sparsely activated model could learn this behavior on its own.
 
