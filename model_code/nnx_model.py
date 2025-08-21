@@ -902,7 +902,7 @@ class NNXRefractionModule(nnx.Module):
         return_dict: bool = True,
         gen_mask=None,
     ):
-        input_embeds = jax.lax.stop_gradient(self.wte(input_ids.astype("i4")))
+        input_embeds = self.wte(input_ids.astype("i4"))
 
         hidden_states = self.dropout(input_embeds, deterministic=deterministic)
 
@@ -925,7 +925,7 @@ class NNXRefractionModule(nnx.Module):
 
         if not self.insane:
             assert isinstance(self.lm_head, nnx.Linear)
-            lm_logits = jax.lax.stop_gradient(self.lm_head(hidden_states))
+            lm_logits = self.lm_head(hidden_states)
         else:
             assert isinstance(self.lm_head, CWICDense)
             head_mask = pad_mask

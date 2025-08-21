@@ -345,9 +345,9 @@ def transfer(student_model, teacher_model):
     ):
         insane.transfer_teacher(rngs, up, down, gate)
 
-    student_model.wte.embedding.value = jnp.astype(
+    student_model.wte.embedding=nnx.Variable(jnp.astype(
         teacher_model.wte.embedding.value, student_model.param_dtype
-    ).copy()
+    ).copy())
 
     transfer_rngs = nnx.Rngs(0)
     transfer_qkv(
