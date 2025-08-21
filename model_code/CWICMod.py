@@ -602,7 +602,7 @@ class DistributionTracker(nnx.Module):
             new_upp = new_med + new_std
 
             # calculate update size
-            delta = 1.0 if self.train_mode else 0.0
+            delta = where2.astype(self.param_dtype).mean() if self.train_mode else 0.0
             beta = self.beta.value**delta
 
             # calculate new values
