@@ -1,9 +1,11 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
+from cwic_triton.triton_torch import smm
 
 
 class DistributionTracker(nn.Module):
@@ -197,14 +199,25 @@ class CWICLinear(nn.Module):
                 x.unsqueeze(-1),
             ).view(-1, self.out_features)
         else:
-            x = x * mask
+            if math.prod(og_shape)==1:
+                x = x * mask
 
-            y = torch.einsum(
-                "b n s i, b n i p -> b n s p",
-                self._get_weight(),
-                x.unsqueeze(-1),
-            ).view(-1, self.out_features)
-            y = y + self._get_post_mu()
+                y = smm(
+                    x,
+                    self.weight,
+                    thresh,
+                    stripe_size=self.stripe_size
+                ).view(-1, self.out_features)
+                y = y + self._get_post_mu()
+            else:
+                x = x * mask
+
+                y = torch.einsum(
+                    "b n s i, b n i p -> b n s p",
+                    self._get_weight(),
+                    x.unsqueeze(-1),
+                ).view(-1, self.out_features)
+                y = y + self._get_post_mu()
 
 
         if self.bias is not None:

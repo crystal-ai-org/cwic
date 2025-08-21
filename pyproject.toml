@@ -12,6 +12,7 @@ packages = [
     { include = "model_code", from = "." },
     { include = "cwic_scripts", from = "." },
     { include = "cwic_huggingface", from = "." },
+    { include = "cwic_triton", from = "." },
 ]
 
 [tool.poetry.dependencies]
