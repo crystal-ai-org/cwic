@@ -10,7 +10,8 @@ authors = [
 readme = "README.md"
 packages = [
     { include = "model_code", from = "." },
-    { include = "scripts", from = "." },
+    { include = "cwic_scripts", from = "." },
+    { include = "cwic_huggingface", from = "." },
 ]
 
 [tool.poetry.dependencies]

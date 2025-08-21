@@ -45,8 +45,8 @@ from transformers.utils import TransformersKwargs, auto_docstring, can_return_tu
 from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
 
-from cwic.configuration_cwic import CWICConfig
-from cwic.modules_cwic import CWICLinear, CWICMLP
+from .configuration_cwic import CWICConfig
+from .modules_cwic import CWICLinear, CWICMLP
 
 import math
 

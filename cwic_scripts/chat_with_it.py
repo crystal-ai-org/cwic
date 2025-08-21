@@ -7,7 +7,7 @@ import os
 from scipy.stats import norm
 
 from transformers import pipeline
-from cwic.modelling_cwic import CWICForCausalLM
+from cwic_huggingface.modelling_cwic import CWICForCausalLM
 
 import matplotlib as mpl
 

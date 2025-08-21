@@ -8,13 +8,13 @@ import os
 
 from transformers import AutoTokenizer
 
-from cwic.configuration_cwic import CWICConfig
-from cwic.modelling_cwic import CWICForCausalLM, CWICDecoderLayer
-from cwic.modules_cwic import CWICLinear, CWICMLP
+from cwic_huggingface.configuration_cwic import CWICConfig
+from cwic_huggingface.modelling_cwic import CWICForCausalLM, CWICDecoderLayer
+from cwic_huggingface.modules_cwic import CWICLinear, CWICMLP
 
-CHECKPOINT = "./checkpoints/release_fr_6"
+CHECKPOINT = "./checkpoints/release_fr_5"
 CONFIG = "./configs/llama_3-2_1B_Instruct.json"
-SAVE_PATH = "./torch_checkpoints/release_fr_6"
+SAVE_PATH = "./torch_checkpoints/release_fr_5"
 
 
 def load(param, x):
