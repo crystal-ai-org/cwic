@@ -1,5 +1,6 @@
 # Compute Where It Counts: High Quality Sparsely Activated LLMs
 
+![chat_terminal.png](assets/chat_terminal.png)
 
 **CWIC** (Compute Where It Counts), is a new method for creating efficient transformers that automatically decide when to use more or less compute. CWIC makes models **faster, more cost-efficient, and more interpretable**.
 
