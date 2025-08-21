@@ -1,5 +1,7 @@
 # Compute Where It Counts: High Quality Sparsely Activated LLMs
 
+![A diagram demontrating the increased expressiveness of granular sparsity.](./assets/sparsity_patterns.svg)
+
 **CWIC** (Compute Where It Counts), is a new method for creating efficient transformers that automatically decide when to use more or less compute. CWIC makes models **faster, more cost-efficient, and more interpretable**.
 
 **Summary:**
