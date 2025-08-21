@@ -7,13 +7,18 @@ import os
 from scipy.stats import norm
 
 from transformers import pipeline
+
 from cwic_huggingface.modelling_cwic import CWICForCausalLM
 
 import matplotlib as mpl
 
 OUTPUT_FOLDER = "./flop_diagrams"
-# 3x active parameter reduction over Llama-3.1-1B-Instruct
-CHECKPOINT = "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct"
+FR = 6 # Nx active parameter reduction over Llama-3.1-1B-Instruct
+# NORMALIZER for flop coloring in terminal as well
+CHECKPOINT = {
+    3: "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct",
+    6: "crystal-ai/CWICLlama-3.2-1B-A206M-Instruct",
+}[FR]
 
 from termcolor import colored, cprint
 
@@ -35,16 +40,16 @@ def show_flops(tokenizer, input_ids, flops):
     # colors = 0.5 * colors / (np.std(colors) + 0.0001)
     # colors = np.argsort(np.argsort(colors)) / colors.shape[0]
     
-    colors = flops / flops.max()
+    colors = flops* FR / 2 # / flops.max()
     colors = colors.tolist()
     def terminal_escape(x):
         return x
     
     cmap = mpl.colormaps['YlGnBu']
-    cmap_fn = lambda x: str(tuple(int(c* 255) for c in cmap(x*0.5)[:3]))
+    cmap_fn = lambda x: str(tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5)[:3]))
     print("".join(
             [
-                colored(terminal_escape(tokenizer.decode([m])),(0,0,0),tuple(int(c* 255) for c in cmap(x*0.5))[:3])
+                colored(terminal_escape(tokenizer.decode([m])),(0,0,0),tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5))[:3])
                 for m, x in zip(
                     input_ids,
                     [0.0] + colors[:-1],
@@ -72,14 +77,11 @@ def show_flops(tokenizer, input_ids, flops):
     return html
 
 
-
-
 def main():
     
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
     torch.backends.cudnn.deterministic = True
-
     pipe = pipeline(
         "text-generation",
         model=CHECKPOINT,
@@ -110,8 +112,6 @@ def main():
         )
 
         output_text = outputs[0]["generated_text"][-1]['content']
-        
-        print("\n" + output_text)
 
         messages += [
             {
@@ -131,7 +131,7 @@ def main():
         )
 
         input_ids = input_ids[0].detach().cpu().numpy()
-        flops = (out.active_parameters)[0].detach().cpu().numpy()
+        flops = (out.active_parameters/out.dense_parameters)[0].detach().cpu().numpy()
 
         html = show_flops(pipe.tokenizer, input_ids, flops)
 
