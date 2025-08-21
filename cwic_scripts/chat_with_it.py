@@ -1,3 +1,4 @@
+import re
 import torch
 
 import numpy as np
@@ -47,9 +48,21 @@ def show_flops(tokenizer, input_ids, flops):
     
     cmap = mpl.colormaps['YlGnBu']
     cmap_fn = lambda x: str(tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5)[:3]))
+    def f(m,x):
+        
+        text=tokenizer.decode([m])
+        outs=[]
+        for t in text: #re.findall(u'(?:[\ud800-\udbff][\udc00-\udfff])|.',text):
+            esc=terminal_escape(t)
+            if t=="\n":
+                outs.append(esc)
+            else:
+                outs.append(colored(esc,(0,0,0),tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5))[:3]))
+        return "".join(outs)
+
     print("".join(
             [
-                colored(terminal_escape(tokenizer.decode([m])),(0,0,0),tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5))[:3])
+                f(m,x)
                 for m, x in zip(
                     input_ids,
                     [0.0] + colors[:-1],
