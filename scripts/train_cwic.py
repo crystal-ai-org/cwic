@@ -117,7 +117,7 @@ config = CWICConfig(
     **vars(og_model_config),
     cwic_stripe_size=eval(iniconfig["ablations"]["stripe_size"]),
     cwic_stripe_size_lm_head=eval(iniconfig["ablations"]["stripe_size_lm_head"]),
-    cwic_threshold_learning_scale=40.0,
+    cwic_threshold_learning_scale=10.0,
     cwic_bandwidth=0.1,
     cwic_threshold_shift_cap=1.0,
 )
