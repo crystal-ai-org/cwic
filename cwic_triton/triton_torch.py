@@ -126,9 +126,9 @@ def smm(x: torch.Tensor, w: torch.Tensor, t: torch.Tensor,
     """
     # Ensure input is 2D for processing
     original_shape = x.shape
-    if x.dim() > 2:
-        x = x.view(-1, x.shape[-1])
-        t = t.view(-1, t.shape[-1])
+    assert math.prod(x.shape[:-1])==1
+    x = x.view(-1, x.shape[-1])
+    t = t.view(-1, t.shape[-1])
     
     batch_size = x.shape[0] if x.dim() == 2 else 1
     M = x.shape[-1]  # Input feature dimension
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # Test the function
     M, N = 512,2048
     stripe_size=1024
-    x = torch.randn(M, device='cuda', dtype=torch.float32)
+    x = torch.randn((1,M), device='cuda', dtype=torch.float32)
     w = torch.randn(M, N, device='cuda', dtype=torch.float32)/M**0.5
     t = torch.zeros((N//stripe_size,M), device='cuda', dtype=torch.float32)+0.5
     

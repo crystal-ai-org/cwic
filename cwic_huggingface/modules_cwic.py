@@ -200,8 +200,6 @@ class CWICLinear(nn.Module):
             ).view(-1, self.out_features)
         else:
             if math.prod(og_shape)==1:
-                x = x * mask
-
                 y = smm(
                     x,
                     self.weight,
