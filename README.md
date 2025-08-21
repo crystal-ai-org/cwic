@@ -27,7 +27,10 @@ pixi shell
 ```sh
 python cwic_scripts/chat_with_it.py
 ```
+This will let you chat with one of our models and get output highlighted based off active parameters used!
 
+darker blue is more compute, light highlight is less
+![chat_with_it.png](assets/chat_with_it.png)
 ## Training
 ```sh
 wandb login
