@@ -59,7 +59,7 @@ def main(config: omegaconf.DictConfig):
     # but CWIC works best in float32
     student_model = student_model.to(torch.float32)
     student_model.train()
-    # student_model.gradient_checkpointing_enable()
+    student_model.gradient_checkpointing_enable()
     logger.info("Converted teacher model to CWIC format!")
 
     optimizer = torch.optim.AdamW(

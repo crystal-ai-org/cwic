@@ -321,9 +321,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
     @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
     def forward(
         self,
-        hidden_states: torch.Tensor,
-        dense_params,
-        active_params,
+        hidden_states_and_param_counts: tuple[torch.Tensor,torch.Tensor,torch.Tensor],
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
@@ -332,8 +330,8 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        hidden_states, dense_params,active_params = hidden_states_and_param_counts
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         # Self Attention
@@ -469,15 +467,13 @@ class CWICModel(CWICPreTrainedModel):
             past_key_values=past_key_values,
             position_ids=position_ids,
         )
-
         hidden_states = inputs_embeds
+        hidden_states_and_param_counts = hidden_states, dense_params,active_params
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
-            hidden_states, dense_paramsl, active_paramsl  = decoder_layer(
-                hidden_states,
-                dense_params,
-                active_params,
+            hidden_states_and_param_counts = decoder_layer(
+                hidden_states_and_param_counts
                 attention_mask=causal_mask,
                 position_ids=position_ids,
                 past_key_values=past_key_values,
@@ -486,9 +482,7 @@ class CWICModel(CWICPreTrainedModel):
                 statistics_mask=statistics_mask,
                 **kwargs,
             )
-            dense_params=dense_paramsl 
-            active_params=active_paramsl
-
+        hidden_states, dense_params,active_params =hidden_states_and_param_counts
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(
             last_hidden_state=hidden_states,
