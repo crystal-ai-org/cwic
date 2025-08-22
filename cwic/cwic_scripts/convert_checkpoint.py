@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,9 +12,29 @@ from cwic.models.configuration_cwic import CWICConfig
 from cwic.models.modelling_cwic import CWICForCausalLM, CWICDecoderLayer
 from cwic.models.modules import CWICLinear, CWICMLP
 
-CHECKPOINT = "./checkpoints/release_fr_3"
+
+
 CONFIG = "./configs/llama_3-2_1B_Instruct.json"
+
+CHECKPOINT = "./checkpoints/release_fr_2"
+SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A620M-Instruct"
+
+CHECKPOINT = "./checkpoints/release_fr_3"
 SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct"
+
+CHECKPOINT = "./checkpoints/release_fr_4"
+SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A310M-Instruct"
+
+CHECKPOINT = "./checkpoints/release_fr_5"
+SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A248M-Instruct"
+
+CHECKPOINT = "./checkpoints/release_fr_6"
+SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A206M-Instruct"
+
+
+
+
+
 
 
 def load(param, x):
@@ -47,7 +68,7 @@ def load_linear(module: CWICLinear, checkpoint: dict, name: str, layer: int):
     upp = c["dist_tracker.upp"][layer] #/ (div + 1e-7)
 
     load(module.distribution_tracker.med, med)
-    load(module.distribution_tracker.aad, (upp - med) + 1e-7)
+    load(module.distribution_tracker.aad, (upp - med)*math.sqrt(2 / math.pi))
     load(module.distribution_tracker.steps, steps[0])
 
     load(module.thresholds, (c["thresholds"][layer]).T)# * c["scalar_scaler"][layer].item()).T)
@@ -75,7 +96,7 @@ def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
     upp = c["dist_tracker.upp"][layer]# / (div + 1e-7)
     # todo runnings
     load(module.distribution_tracker.med, med)
-    load(module.distribution_tracker.aad, (upp - med) )
+    load(module.distribution_tracker.aad, (upp - med)*math.sqrt(2 / math.pi) )
     load(module.distribution_tracker.steps, steps[0] )
 
     div = 1 - c["mad_tracker.beta"][layer].item() ** c["mad_tracker.steps"][layer].item()
@@ -86,7 +107,7 @@ def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
 
     load(module.mad_tracker.med, med)
 
-    load(module.mad_tracker.aad, (upp - med) )
+    load(module.mad_tracker.aad, (upp - med)*math.sqrt(2 / math.pi) )
     load(module.mad_tracker.steps, steps[0] )
 
     load(module.thresholds, c["thresholds"][layer])# * c["scalar_scaler"][layer].item())

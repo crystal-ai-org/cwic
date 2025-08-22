@@ -403,7 +403,7 @@ class RobustDistributionTracker(nn.Module):
         med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser
 
-        return med_debiased, aad_debiased / math.sqrt(2 * math.pi)
+        return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
 
 
 def geometric_median(x, num_iters, dim, mask=None, eps=1e-7, verbose=False):
