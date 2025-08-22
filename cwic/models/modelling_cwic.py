@@ -209,11 +209,7 @@ class CWICAttention(nn.Module):
         self.qkv_proj = CWICLinear(
             config.hidden_size,
             sum(self.qkv_splits),
-<<<<<<< HEAD
             config.stripe_size,
-            bias=config.attention_bias,
-=======
-            config.num_stripes,
             bias=config.attention_bias,
             threshold_lr_scale=config.threshold_lr_scale,
             threshold_init=config.threshold_init,
@@ -222,16 +218,11 @@ class CWICAttention(nn.Module):
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
->>>>>>> fe02f01 (working training (not fully tested))
         )
         self.o_proj = CWICLinear(
             config.num_attention_heads * self.head_dim,
             config.hidden_size,
-<<<<<<< HEAD
             config.stripe_size,
-            bias=config.attention_bias,
-=======
-            config.num_stripes,
             bias=config.attention_bias,
             threshold_lr_scale=config.threshold_lr_scale,
             threshold_init=config.threshold_init,
@@ -240,7 +231,6 @@ class CWICAttention(nn.Module):
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
->>>>>>> fe02f01 (working training (not fully tested))
         )
 
     @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
@@ -253,7 +243,7 @@ class CWICAttention(nn.Module):
         cache_position: Optional[torch.LongTensor] = None,
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
 
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
@@ -291,12 +281,12 @@ class CWICAttention(nn.Module):
         )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-        attn_output, (o_dense_params, o_active_params) = self.o_proj(attn_output, statistics_mask=statistics_mask)
+        attn_output, (o_dense_parameters, o_active_parameters) = self.o_proj(attn_output, statistics_mask=statistics_mask)
         
-        dense_params = qkv_dense_params + o_dense_params
-        active_params = qkv_active_params + o_active_params
+        dense_parameters = qkv_dense_parameters + o_dense_parameters
+        active_parameters = qkv_active_parameters + o_active_parameters
         
-        return attn_output, attn_weights, (dense_params, active_params)
+        return attn_output, attn_weights, (dense_parameters, active_parameters)
 
 
 class CWICDecoderLayer(GradientCheckpointingLayer):
@@ -314,7 +304,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
             in_features=config.hidden_size,
             inter_features=config.intermediate_size,
             out_features=config.hidden_size,
-            num_stripes=config.num_stripes,
+            stripe_size=config.stripe_size,
             hidden_act=config.hidden_act,
             bias=config.mlp_bias,
             threshold_lr_scale=config.threshold_lr_scale,
@@ -340,7 +330,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor,]:
+    ) -> Tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
 
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
@@ -508,19 +498,12 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.model = CWICModel(config)
         self.vocab_size = config.vocab_size
-<<<<<<< HEAD
 
         num_head_stripes = math.ceil(config.vocab_size / config.head_stripe_size)
         self.lm_head = CWICLinear(
             config.hidden_size,
             num_head_stripes * config.head_stripe_size,
             config.head_stripe_size,
-            bias=False,
-=======
-        self.lm_head = CWICLinear(
-            config.hidden_size,
-            config.vocab_size,
-            config.num_head_stripes,
             bias=False,
             threshold_lr_scale=config.threshold_lr_scale,
             threshold_init=config.threshold_init,
@@ -529,7 +512,6 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
->>>>>>> fe02f01 (working training (not fully tested))
         )
 
         # Initialize weights and apply final processing

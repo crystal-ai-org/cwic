@@ -2,7 +2,7 @@ import os
 from html import escape as html_escape
 from scipy.stats import norm
 
-from cwic_huggingface.modelling_cwic import CWICForCausalLM
+from cwic.models.modelling_cwic import CWICForCausalLM
 from transformers import pipeline
 
 import matplotlib as mpl

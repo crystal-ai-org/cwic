@@ -1,3 +1,4 @@
+import math
 from typing import Tuple, Optional
 
 import torch
@@ -9,7 +10,10 @@ import numpy as np
 from transformers.utils import logging
 from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
-
+try:
+    from cwic_triton.triton_torch import smm
+except:
+    smm=None
 from utils.torch_utils import attach_gradient
 
 
@@ -22,7 +26,7 @@ class CWICLinear(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        num_stripes: int,
+        stripe_size: int,
         bias: Optional[bool] = True,
         threshold_lr_scale: float = 1.0,
         threshold_init: float = 0.1,
@@ -35,26 +39,25 @@ class CWICLinear(nn.Module):
         super().__init__()
 
         self.in_features = in_features
-        self.num_stripes = num_stripes
+        self.stripe_size = stripe_size
         
         self.bandwidth = bandwidth
         self.eps = eps
 
-        if out_features % num_stripes == 0:
+        if out_features % stripe_size == 0:
             self.og_out_features = out_features
             self.out_features = out_features
-            self.stripe_size = out_features // num_stripes
 
         else:
             self.og_out_features = out_features
             
-            out_features = num_stripes * (1 + out_features // num_stripes)
+            out_features = stripe_size * (1 + out_features // stripe_size)
             self.out_features = out_features
-            self.stripe_size = out_features // num_stripes
 
             logger.warning(
-                f"`out_features` {self.og_out_features} is not divisible by `num_stripes`. {num_stripes} Adjusting `out_features` to be {out_features}"
+                f"`out_features` {self.og_out_features} is not divisible by `stripe_size`. {stripe_size} Adjusting `out_features` to be {out_features}"
             )
+        self.num_stripes = self.out_features//self.stripe_size
 
         # note that this is transposed compared to nn.Linear for inference kernel compatibility
         self.weight = nn.Parameter(
@@ -82,16 +85,64 @@ class CWICLinear(nn.Module):
             eps=eps
         )
 
+        self.cached_weight = None
+        self.cached_post_mu = None
+        self.cached_thresholds = None
 
-    def _get_weight(self) -> torch.Tensor:
-        return self.weight.T.view(1, self.num_stripes, self.stripe_size, self.in_features)
+
+
+    def _get_weight(self) -> torch.FloatTensor:
+
+        f = lambda x: x.T.view(1, self.num_stripes, self.stripe_size, self.in_features)
+
+        if self.training:
+            self.cached_weight = None
+            return f(self.weight)
+        
+        else:
+            # Use cached weight during inference if available
+            if self.cached_weight is None:
+                self.cached_weight = f(self.weight).detach().contiguous()
+
+            return self.cached_weight
+
+    def _get_post_mu(self) -> torch.FloatTensor:
+
+        f = lambda x,y: torch.einsum("a b, a -> b",x,y)
+
+        if self.training:
+            self.cached_post_mu = None
+            return f(self.weight,self.dist_tracker.adj_med_computed)
+        
+        else:
+            # Use cached weight during inference if available
+            if self.cached_post_mu is None:
+                self.cached_post_mu = f(self.weight,self.dist_tracker.adj_med_computed).detach().contiguous()
+
+            return self.cached_post_mu
+        
+    
+    def _get_thresholds(self, std) -> torch.FloatTensor:
+
+        f = lambda x, s: (x * s[None] *self.threshold_lr_scale)[None]
+
+        if self.training:
+            self.cached_thresholds = None
+            return f(self.thresholds, std)
+        
+        else:
+            # Use cached weight during inference if available
+            if self.cached_thresholds is None:
+                self.cached_thresholds = f(self.thresholds, std).detach().contiguous()
+
+            return self.cached_thresholds
 
 
     def forward(
         self,
         x: torch.Tensor,
         statistics_mask: Optional[torch.BoolTensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Shape annotations:
 
@@ -111,57 +162,82 @@ class CWICLinear(nn.Module):
         og_shape = x.shape[:-1]
         x = x.view(-1, 1, self.in_features)
         
-        thresholds = (
-            self.thresholds[None]
-            * self.threshold_lr_scale
-            * std[None, None] 
-        ) # [1, N, I]
-        bandwidth = (
-            self.bandwidth
-            * std[None, None]
-        ) + self.eps # [1, 1, I]
+        thresholds = self._get_thresholds(std) # [1, N, I]
 
         # [B, 1, I]
         x_demeaned = x - mu[None, None]  
         x_gate = x_demeaned.abs()
         
         # [B, N, I], [B, N, I]
-        x_masked, mask = step_with_grads(
-            x_demeaned,
-            x_gate,
-            thresholds,
-            bandwidth
-        )
+        if self.training:
 
-        # [B, N, I, 1]
-        x = (x_masked + mu[None, None]).unsqueeze(-1)
+            bandwidth = (
+                self.bandwidth
+                * std[None, None]
+            ) + self.eps # [1, 1, I]
+            x_masked, mask = step_with_grads(
+                x_demeaned,
+                x_gate,
+                thresholds,
+                bandwidth
+            )
+                
 
-        # [1, N, S, I]
-        w = self._get_weight()
+            # [B, N, I, 1]
+            x = (x_masked + mu[None, None]).unsqueeze(-1)
 
-        # [B, N, S, 1]
-        y = torch.einsum(
-            "B N S I, B N I P -> B N S P",
-            w, x
-        )
+            # [1, N, S, I]
+            w = self._get_weight()
 
-        # [B, O]
-        y = y.view(-1, self.out_features)
-        if self.bias is not None:
-            y = y + self.bias[None]
+            # [B, N, S, 1]
+            y = torch.einsum(
+                "B N S I, B N I P -> B N S P",
+                w, x
+            )
 
-        # move y back to the original shape
-        y = y.view(*og_shape, self.out_features)
+            # [B, O]
+            y = y.view(-1, self.out_features)
+            if self.bias is not None:
+                y = y + self.bias[None]
 
-        # correct the shape to the corrected output size
-        if self.og_out_features != self.out_features:
-            y = y[..., :self.og_out_features]
+            # move y back to the original shape
+            y = y.view(*og_shape, self.out_features)
+
+        else:
+            mask = (
+                x_gate > thresholds
+            ).to(x.dtype)
+            if math.prod(og_shape)==1 and smm is not None:
+                y = smm(
+                    x,
+                    self.weight,
+                    thresholds,
+                    stripe_size=self.stripe_size
+                ).view(-1, self.out_features)
+                y = y + self._get_post_mu()
+            else:
+                x = x * mask
+
+                y = torch.einsum(
+                    "b n s i, b n i p -> b n s p",
+                    self._get_weight(),
+                    x.unsqueeze(-1),
+                ).view(-1, self.out_features)
+                y = y + self._get_post_mu()
+            if self.bias is not None:
+                y = y + self.bias[None]
+
+            y = y.view(*og_shape, self.out_features)
+
+            # correct the shape to the corrected output size
+            if self.og_out_features != self.out_features:
+                y = y[..., :self.og_out_features]
 
         # calculate the parameter usage
         active_params = self.stripe_size * mask.view(*og_shape, -1).sum(dim=-1)
         dense_params = self.stripe_size * torch.ones_like(mask).view(*og_shape, -1).sum(dim=-1)
 
-        return y, dense_params, active_params
+        return y, (dense_params, active_params)
 
 
 class CWICMLP(nn.Module):
@@ -171,7 +247,7 @@ class CWICMLP(nn.Module):
         in_features: int,
         inter_features: int,
         out_features: int,
-        num_stripes: int,
+        stripe_size: int,
         hidden_act: str = "silu",
         bias: bool = True,
         threshold_lr_scale: float = 1.0,
@@ -194,7 +270,7 @@ class CWICMLP(nn.Module):
         self.gate = CWICLinear(
             in_features,
             inter_features,
-            num_stripes,
+            stripe_size,
             bias=bias,
             threshold_lr_scale=threshold_lr_scale
         )
@@ -237,9 +313,9 @@ class CWICMLP(nn.Module):
         self,
         x: torch.Tensor,
         statistics_mask: Optional[torch.BoolTensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
 
-        z, gate_dense_params, gate_active_params = self.gate(x, statistics_mask=statistics_mask)
+        z, (gate_dense_params, gate_active_params) = self.gate(x, statistics_mask=statistics_mask)
         z = self.act_fn(z)
 
         std = self.dist_tracker(
@@ -275,7 +351,7 @@ class CWICMLP(nn.Module):
         active_params = gate_active_params + (self.in_features + self.out_features) * mask.sum(dim=-1)
         dense_params = gate_dense_params + (self.in_features + self.out_features) * torch.ones_like(mask).sum(dim=-1)
 
-        return y, dense_params, active_params
+        return y, (dense_params, active_params)
 
 
 def step_with_grads(
@@ -287,8 +363,8 @@ def step_with_grads(
 
     mask = (x_gate > thresholds).to(x.dtype)
     
-    kernel = F.hardsigmoid(3 * (x_gate - thresholds) / bandwidth)
-    nog_kernel = F.hardsigmoid(3 * (x_gate.detach() - thresholds) / bandwidth)
+    kernel = F.hardsigmoid(3 * (x_gate - thresholds) / bandwidth*2)
+    nog_kernel = F.hardsigmoid(3 * (x_gate.detach() - thresholds) / bandwidth*2)
 
     mask = attach_gradient(kernel, mask)
     nog_mask = attach_gradient(nog_kernel, mask)
@@ -343,7 +419,7 @@ class RobustDistributionTracker(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = x.detach()
 
-        if self.training and torch.is_grad_enabled():
+        if self.training:
             with torch.no_grad():
 
                 x = x.view(-1, self.hidden_size)
@@ -382,6 +458,7 @@ class RobustDistributionTracker(nn.Module):
 
         else:
             adj_med, adj_std = self.adj_med_computed, self.adj_std_computed
+            
 
         return adj_med, adj_std
 
