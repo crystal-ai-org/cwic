@@ -370,7 +370,7 @@ def step_with_grads(
     nog_mask = attach_gradient(nog_kernel, mask)
 
     out = attach_gradient(
-        x, x.detach() * nog_mask,
+        x.detach() * mask.detach(), x + x.detach() * nog_mask,
     )
 
     return out, mask
