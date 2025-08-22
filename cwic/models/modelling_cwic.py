@@ -322,6 +322,8 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        dense_params,
+        active_params,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
@@ -354,8 +356,11 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         hidden_states, (mlp_dense_params, mlp_active_params) = self.mlp(hidden_states, statistics_mask=statistics_mask)
         hidden_states = residual + hidden_states
 
-        dense_params = attn_dense_params + mlp_dense_params
-        active_params = attn_active_params + mlp_active_params
+        layer_dense_params = attn_dense_params + mlp_dense_params
+        layer_active_params = attn_active_params + mlp_active_params
+
+        dense_params = dense_params + layer_dense_params
+        active_params = active_params + layer_active_params
 
         return hidden_states, (dense_params, active_params)
 
@@ -469,8 +474,10 @@ class CWICModel(CWICPreTrainedModel):
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
-            hidden_states, (layer_dense_params, layer_active_params)  = decoder_layer(
+            hidden_states, (dense_params, active_params)  = decoder_layer(
                 hidden_states,
+                dense_params,
+                active_params,
                 attention_mask=causal_mask,
                 position_ids=position_ids,
                 past_key_values=past_key_values,
@@ -479,8 +486,6 @@ class CWICModel(CWICPreTrainedModel):
                 statistics_mask=statistics_mask,
                 **kwargs,
             )
-            dense_params = dense_params + layer_dense_params
-            active_params = active_params + layer_active_params
 
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(

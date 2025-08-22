@@ -366,8 +366,8 @@ def step_with_grads(
     kernel = F.hardsigmoid(3 * (x_gate - thresholds) / bandwidth*2)
     nog_kernel = F.hardsigmoid(3 * (x_gate.detach() - thresholds) / bandwidth*2)
 
-    mask = attach_gradient(kernel, mask)
     nog_mask = attach_gradient(nog_kernel, mask)
+    mask = attach_gradient(kernel, mask)
 
     out = attach_gradient(
         x, x.detach() * nog_mask,
@@ -447,7 +447,7 @@ class RobustDistributionTracker(nn.Module):
 
                 new_std = (
                     ((x - med_debiased[None]).abs() * statistics_mask).mean(0) / statistics_mask.mean(0)
-                ) / np.sqrt(2 * np.pi)
+                ) / np.sqrt(np.pi / 2)
                 self.upp=self.med+(sbeta * old_std + (1 - sbeta) * new_std)
                 
                 aad_debiased = (self.upp-self.med) * debiaser
@@ -481,7 +481,7 @@ def geometric_median(
     scale = 1 / (mask.mean(dim, keepdim=True) + eps)
 
     mu = x.mean(dim, keepdim=True) * scale
-
+    
     if verbose:
         print(f"Target Median: {torch.median(x, dim=dim).values}")
         print(f"Initial Mu: {mu.squeeze(dim)}")
