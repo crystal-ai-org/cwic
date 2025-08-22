@@ -17,6 +17,8 @@ model:
   num_head_stripes: 8
 
   threshold_lr_scale: 10.0
+  threshold_init: 0.1
+  threshold_minimum: 0.001
 
   bandwidth: 0.1
 

@@ -115,6 +115,10 @@ class CWICConfig(PretrainedConfig):
             The stripe size for the CWIC LM head.
         threshold_lr_scale (`float`, *optional*, defaults to 1.0):
             The scale factor for the threshold learning rate.
+        threshold_init (`float`, *optional*, defaults to 0.1):
+            The initial value for the thresholds in the CWIC model.
+        threshold_minimum (`float`, *optional*, defaults to 1e-3):
+            The minimum value for the thresholds in the CWIC model.
         bandwidth (`float`, *optional*, defaults to 0.1):
             The bandwidth for the CWIC gradient estimators.
         stats_beta (`float`, *optional*, defaults to 0.99):
@@ -165,6 +169,8 @@ class CWICConfig(PretrainedConfig):
         stripe_size=1,
         head_stripe_size=1,
         threshold_lr_scale=1.0,
+        threshold_init=0.1,
+        threshold_minimum=1e-3,
         bandwidth=0.1,
         stats_beta=0.99,
         median_iters=3,
@@ -205,6 +211,9 @@ class CWICConfig(PretrainedConfig):
         self.head_stripe_size = head_stripe_size
 
         self.threshold_lr_scale = threshold_lr_scale
+        self.threshold_init = threshold_init
+        self.threshold_minimum = threshold_minimum
+        
         self.bandwidth = bandwidth
         self.stats_beta = stats_beta
         self.median_iters = median_iters

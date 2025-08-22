@@ -216,6 +216,8 @@ class CWICAttention(nn.Module):
             config.num_stripes,
             bias=config.attention_bias,
             threshold_lr_scale=config.threshold_lr_scale,
+            threshold_init=config.threshold_init,
+            threshold_minimum=config.threshold_minimum,
             bandwidth=config.bandwidth,
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
@@ -232,6 +234,8 @@ class CWICAttention(nn.Module):
             config.num_stripes,
             bias=config.attention_bias,
             threshold_lr_scale=config.threshold_lr_scale,
+            threshold_init=config.threshold_init,
+            threshold_minimum=config.threshold_minimum,
             bandwidth=config.bandwidth,
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
@@ -314,6 +318,8 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
             hidden_act=config.hidden_act,
             bias=config.mlp_bias,
             threshold_lr_scale=config.threshold_lr_scale,
+            threshold_init=config.threshold_init,
+            threshold_minimum=config.threshold_minimum,
             bandwidth=config.bandwidth,
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
@@ -385,6 +391,15 @@ class CWICPreTrainedModel(PreTrainedModel):
         "hidden_states": CWICDecoderLayer,
         "attentions": CWICAttention,
     }
+
+    @torch.no_grad()
+    def clip_thresholds(self):
+        for m in self.modules():
+            
+            if isinstance(m, (CWICLinear, CWICMLP)):
+                m.thresholds.data.clamp_(
+                    min=m.threshold_minimum
+                )
 
 
 @auto_docstring
@@ -508,6 +523,8 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             config.num_head_stripes,
             bias=False,
             threshold_lr_scale=config.threshold_lr_scale,
+            threshold_init=config.threshold_init,
+            threshold_minimum=config.threshold_minimum,
             bandwidth=config.bandwidth,
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,

@@ -25,6 +25,8 @@ class CWICLinear(nn.Module):
         num_stripes: int,
         bias: Optional[bool] = True,
         threshold_lr_scale: float = 1.0,
+        threshold_init: float = 0.1,
+        threshold_minimum: float = 1e-3,
         bandwidth: float = 0.1,
         stats_beta: float = 0.99,
         median_iters: int = 3,
@@ -64,12 +66,14 @@ class CWICLinear(nn.Module):
                 torch.zeros(out_features)
             )
 
-        self.thresholds = nn.Parameter(
-            torch.zeros(self.num_stripes, self.in_features)
-        )
-
         # when the argument threshold_lr_scale is 1.0, the thresholds move at the same 'speed' as the weights
         self.threshold_lr_scale = threshold_lr_scale * (in_features ** 0.5)
+        self.threshold_minimum = threshold_minimum / self.threshold_lr_scale
+
+        self.thresholds = nn.Parameter(
+            torch.zeros(self.num_stripes, self.in_features) +
+            (threshold_init / self.threshold_lr_scale)
+        )
 
         self.distribution_tracker = RobustDistributionTracker(
             self.in_features,
@@ -171,6 +175,8 @@ class CWICMLP(nn.Module):
         hidden_act: str = "silu",
         bias: bool = True,
         threshold_lr_scale: float = 1.0,
+        threshold_init: float = 0.1,
+        threshold_minimum: float = 1e-3,
         bandwidth: float = 0.1,
         stats_beta: float = 0.99,
         median_iters: int = 3,
@@ -203,12 +209,14 @@ class CWICMLP(nn.Module):
             bias
         )
 
+        self.threshold_lr_scale = threshold_lr_scale * (in_features ** 0.5)
+        self.threshold_minimum = threshold_minimum / self.threshold_lr_scale
+
         self.thresholds = nn.Parameter(
-            torch.zeros(inter_features)
+            torch.zeros(self.inter_features) +
+            (threshold_init / self.threshold_lr_scale)
         )
 
-        self.threshold_lr_scale = threshold_lr_scale * (in_features ** 0.5)
-        
         self.act_fn = ACT2FN[hidden_act]
 
         self.distribution_tracker = RobustDistributionTracker(

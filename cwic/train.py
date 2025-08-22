@@ -119,6 +119,8 @@ def main(config: omegaconf.DictConfig):
         optimizer.zero_grad(True)
         lr_scheduler.step()
 
+        student_model.clip_thresholds()
+
         pbar.update(1)
         pbar.set_postfix(
             {
