@@ -396,7 +396,7 @@ class RobustDistributionTracker(nn.Module):
                 aad_debiased = self.aad * debiaser
 
                 # assuming that x is gaussian, we scale the AAD to get the STD
-                return med_debiased, aad_debiased / math.sqrt(2 * math.pi)
+                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
 
         debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
 
