@@ -96,7 +96,6 @@ grad_batch_dim_per_proc *= jax.local_device_count()
 dataset_name = "crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled"
 
 
-
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 hf_model = AutoModelForCausalLM.from_pretrained(checkpoint).to("cpu")
@@ -345,9 +344,9 @@ def transfer(student_model, teacher_model):
     ):
         insane.transfer_teacher(rngs, up, down, gate)
 
-    student_model.wte.embedding=nnx.Variable(jnp.astype(
-        teacher_model.wte.embedding.value, student_model.param_dtype
-    ).copy())
+    student_model.wte.embedding = nnx.Variable(
+        jnp.astype(teacher_model.wte.embedding.value, student_model.param_dtype).copy()
+    )
 
     transfer_rngs = nnx.Rngs(0)
     transfer_qkv(
@@ -518,12 +517,15 @@ optimizer_config = {
     "config": {"beta1": beta1, "beta2": beta2, "learning_rate": learning_rate},
 }
 import json
+
+
 def json_serializable(obj):
     try:
         json.dumps(obj)
         return True
     except Exception:
         return False
+
 
 run_config = {
     "dataset_name": dataset_name,
@@ -536,7 +538,7 @@ run_config = {
     "max_train_seq_len": max_train_seq_len,
     "distill_temperature": distill_temperature,
     "weight_decay": weight_decay,
-    "cwic_config": dict(list(filter(json_serializable, vars(config).items())))
+    "cwic_config": dict(list(filter(json_serializable, vars(config).items()))),
 }
 
 
@@ -544,13 +546,13 @@ run_config = {
 optimizer = nnx.Optimizer(
     student_model,
     optax.MultiSteps(
-    optax.chain(
-        clip_by_global_norm_quantile(history_length=100, top_k=10),
-        optax.scale_by_adam(beta1, beta2),
-        optax.add_decayed_weights(weight_decay),
-        optax.scale_by_schedule(optax.schedules.warmup_constant_schedule(0.0, 1.0, 400)),
-        optax.scale(-learning_rate),
-    ),
+        optax.chain(
+            clip_by_global_norm_quantile(history_length=100, top_k=10),
+            optax.scale_by_adam(beta1, beta2),
+            optax.add_decayed_weights(weight_decay),
+            optax.scale_by_schedule(optax.schedules.warmup_constant_schedule(0.0, 1.0, 400)),
+            optax.scale(-learning_rate),
+        ),
         every_k_schedule=grad_accums,
     ),  # pyright: ignore[reportArgumentType]
     wrt=nnx.Param,
@@ -562,7 +564,11 @@ options = ocp.CheckpointManagerOptions(max_to_keep=4 if local_ckpts else 32)
 model_date_time = str(datetime.datetime.now())
 import os
 
-save_path = os.path.join(os.getcwd(), args.save_checkpoints_to) if local_ckpts else args.save_checkpoints_to
+save_path = (
+    os.path.join(os.getcwd(), args.save_checkpoints_to)
+    if local_ckpts
+    else args.save_checkpoints_to
+)
 save_path = f"{save_path}/{model_date_time.replace(" ", "_")}"
 mngr = (
     ocp.CheckpointManager(
@@ -674,9 +680,7 @@ def js_divergence(x, y):
     ) / 2
 
 
-def loss_fn(
-    student_model: NNXRefractionModule, t_logits: Array, batch, flop_progress, key
-):
+def loss_fn(student_model: NNXRefractionModule, t_logits: Array, batch, flop_progress, key):
     input_ids, segment_ids, pad_mask, gen_mask = batch
 
     # get model output
@@ -753,7 +757,7 @@ def train_step_t_logits(
     return t_logits
 
 
-@partial(nnx.jit, static_argnames=["no_opt", "init_mode"],donate_argnums=(3,))
+@partial(nnx.jit, static_argnames=["no_opt", "init_mode"], donate_argnums=(3,))
 def train_step(
     teacher_model: NNXRefractionModule,
     student_model: NNXRefractionModule,
@@ -777,7 +781,7 @@ def train_step(
         key,
         gen_mask=gen_mask,
     )
-    t_logits=jax.lax.stop_gradient(t_logits)
+    t_logits = jax.lax.stop_gradient(t_logits)
 
     if no_opt:
         student_model.eval()
@@ -847,12 +851,9 @@ with mesh:
             batch1 = jax.tree.map(
                 lambda x: x[rp * grad_batch_dim : (rp + 1) * grad_batch_dim], batch
             )
-            batch2 = jax.tree.map(
-                lambda x: jax.device_put(jnp.array(x), data_sharding), batch1
-            )
+            batch2 = jax.tree.map(lambda x: jax.device_put(jnp.array(x), data_sharding), batch1)
             # print("IN BATCH SHARDING")
             # jax.debug.visualize_array_sharding(batch2[0])
-            
 
             # print("OUT LOGIT SHARDING")
             # jax.debug.visualize_array_sharding(t_logits[...,0])
@@ -942,9 +943,7 @@ with mesh:
                     )
                 if student_model.h.blocks.attention.wo_i.hist_trace is not None:
                     aux[f"trees/o_{ii:03d}"] = wandb.Image(
-                        np.array(
-                            student_model.h.blocks.attention.wo_i.hist_trace.value[ii] * 255
-                        ),
+                        np.array(student_model.h.blocks.attention.wo_i.hist_trace.value[ii] * 255),
                         "L",
                     )
 
@@ -959,8 +958,7 @@ with mesh:
                 if student_model.h.blocks.feed_forward.ffn_i.hist_trace is not None:
                     aux[f"trees/ffn_{ii:03d}"] = wandb.Image(
                         np.array(
-                            student_model.h.blocks.feed_forward.ffn_i.hist_trace.value[ii]
-                            * 255
+                            student_model.h.blocks.feed_forward.ffn_i.hist_trace.value[ii] * 255
                         ),
                         "L",
                     )
@@ -1078,11 +1076,7 @@ with mesh:
                         )
                     )
                     mc = np.array(
-                        (
-                            (
-                                aux_infer[LossKeys.FLOPS_CWIC] / aux_infer[LossKeys.FLOPS_BASE]
-                            ).ravel()
-                        )
+                        ((aux_infer[LossKeys.FLOPS_CWIC] / aux_infer[LossKeys.FLOPS_BASE]).ravel())
                     ).tolist()
                     colors = np.log10(colors)
                     colors = colors - colors.mean()
@@ -1098,21 +1092,21 @@ with mesh:
                         """<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">"""
-                            + "<pre>"
-                            + "".join(
-                                [
-                                    # background:linear-gradient(90deg,{get_color(c,a1)},{get_color(c2,a2)});
-                                    f'<span style="font-family: Inter;font-optical-sizing: auto;font-weight: {100+int(800*((c*a1+c2*a2*0.0001)/(a1+a2*0.0001))):3d};font-style: normal;">{html.escape(tokenizer.decode([m]))}</span>'
-                                    for m, c, c2, a1, a2 in zip(
-                                        token_id_list,
-                                        [colors[0]] + colors,
-                                        colors + [colors[-1]],
-                                        [0.0] + [1.0] * (len(token_id_list) - 1),
-                                        [1.0] * (len(token_id_list) - 1) + [0.0],
-                                    )
-                                ]
-                            )
-                            + "</pre>"
+                        + "<pre>"
+                        + "".join(
+                            [
+                                # background:linear-gradient(90deg,{get_color(c,a1)},{get_color(c2,a2)});
+                                f'<span style="font-family: Inter;font-optical-sizing: auto;font-weight: {100+int(800*((c*a1+c2*a2*0.0001)/(a1+a2*0.0001))):3d};font-style: normal;">{html.escape(tokenizer.decode([m]))}</span>'
+                                for m, c, c2, a1, a2 in zip(
+                                    token_id_list,
+                                    [colors[0]] + colors,
+                                    colors + [colors[-1]],
+                                    [0.0] + [1.0] * (len(token_id_list) - 1),
+                                    [1.0] * (len(token_id_list) - 1) + [0.0],
+                                )
+                            ]
+                        )
+                        + "</pre>"
                     )
 
                     table.add_data(

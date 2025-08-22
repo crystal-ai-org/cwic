@@ -1,11 +1,18 @@
 import math
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
-from cwic_triton.triton_torch import smm
+
+try:
+    from cwic_triton.triton_torch import smm
+except:
+
+    print("Triton not found, skipping custom ssm")
+    smm = None
 
 
 class DistributionTracker(nn.Module):
@@ -22,14 +29,14 @@ class DistributionTracker(nn.Module):
         self.quantile_bs = quantile_bs
         self.upper_quantile = upper_quantile
 
-        self.register_buffer("beta",torch.tensor(beta, dtype=torch.float32))
-        self.register_buffer("steps",torch.zeros((), dtype=torch.float32))
+        self.register_buffer("beta", torch.tensor(beta, dtype=torch.float32))
+        self.register_buffer("steps", torch.zeros((), dtype=torch.float32))
 
-        self.register_buffer("med",torch.zeros((hidden_size,), dtype=torch.float32))
-        self.register_buffer("upp",torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("med", torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("upp", torch.zeros((hidden_size,), dtype=torch.float32))
 
-        self.register_buffer("adj_med_computed",torch.zeros((hidden_size,), dtype=torch.float32))
-        self.register_buffer("adj_std_computed",torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("adj_med_computed", torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("adj_std_computed", torch.zeros((hidden_size,), dtype=torch.float32))
 
     def __call__(
         self,
@@ -62,8 +69,8 @@ class DistributionTracker(nn.Module):
             old_steps = self.steps.clone()
 
             self.med = med
-            self.upp =upp
-            self.steps =self.steps + delta
+            self.upp = upp
+            self.steps = self.steps + delta
 
             trig = old_steps > 1.0
             med = torch.where(trig, old_med, med)
@@ -76,7 +83,7 @@ class DistributionTracker(nn.Module):
             adj_upp = upp / (div + 1e-7)
             adj_med, adj_std = (
                 (adj_med),
-                (adj_upp - adj_med +1e-7),
+                (adj_upp - adj_med + 1e-7),
             )
             self.adj_med_computed, self.adj_std_computed = adj_med, adj_std
 
@@ -84,7 +91,8 @@ class DistributionTracker(nn.Module):
             adj_med, adj_std = self.adj_med_computed, self.adj_std_computed
 
         return adj_med, adj_std
-    
+
+
 class CWICLinear(nn.Module):
 
     def __init__(
@@ -102,27 +110,22 @@ class CWICLinear(nn.Module):
         self.stripe_size = stripe_size
         self.num_stripes = out_features // stripe_size
         if out_features % stripe_size != 0:
-            raise ValueError(f"out_features {out_features} must be divisible by stripe_size {stripe_size}")
+            raise ValueError(
+                f"out_features {out_features} must be divisible by stripe_size {stripe_size}"
+            )
 
-        self.weight = nn.Parameter(
-            torch.randn(in_features, out_features) / (in_features ** 0.5)
-        )
+        self.weight = nn.Parameter(torch.randn(in_features, out_features) / (in_features**0.5))
         self.bias = None
         if bias:
-            self.bias = nn.Parameter(
-                torch.zeros(out_features)
-            )
+            self.bias = nn.Parameter(torch.zeros(out_features))
 
         self.dist_tracker = DistributionTracker(in_features)
 
-        self.thresholds = nn.Parameter(
-            torch.zeros(self.num_stripes, self.in_features)
-        )
+        self.thresholds = nn.Parameter(torch.zeros(self.num_stripes, self.in_features))
 
         self.cached_weight = None
         self.cached_post_mu = None
         self.cached_thresholds = None
-
 
     def _get_weight(self) -> torch.FloatTensor:
 
@@ -131,7 +134,7 @@ class CWICLinear(nn.Module):
         if torch.is_grad_enabled():
             self.cached_weight = None
             return f(self.weight)
-        
+
         else:
             # Use cached weight during inference if available
             if self.cached_weight is None:
@@ -141,20 +144,21 @@ class CWICLinear(nn.Module):
 
     def _get_post_mu(self) -> torch.FloatTensor:
 
-        f = lambda x,y: torch.einsum("a b, a -> b",x,y)
+        f = lambda x, y: torch.einsum("a b, a -> b", x, y)
 
         if torch.is_grad_enabled():
             self.cached_post_mu = None
-            return f(self.weight,self.dist_tracker.adj_med_computed)
-        
+            return f(self.weight, self.dist_tracker.adj_med_computed)
+
         else:
             # Use cached weight during inference if available
             if self.cached_post_mu is None:
-                self.cached_post_mu = f(self.weight,self.dist_tracker.adj_med_computed).detach().contiguous()
+                self.cached_post_mu = (
+                    f(self.weight, self.dist_tracker.adj_med_computed).detach().contiguous()
+                )
 
             return self.cached_post_mu
-        
-    
+
     def _get_thresholds(self, std) -> torch.FloatTensor:
 
         f = lambda x, s: (x * s[None])[None]
@@ -162,7 +166,7 @@ class CWICLinear(nn.Module):
         if torch.is_grad_enabled():
             self.cached_thresholds = None
             return f(self.thresholds, std)
-        
+
         else:
             # Use cached weight during inference if available
             if self.cached_thresholds is None:
@@ -170,27 +174,23 @@ class CWICLinear(nn.Module):
 
             return self.cached_thresholds
 
-
     def forward(
-        self,
-        x: torch.FloatTensor
-    ) -> tuple[torch.FloatTensor,tuple[torch.FloatTensor,torch.FloatTensor]]:
+        self, x: torch.FloatTensor
+    ) -> tuple[torch.FloatTensor, tuple[torch.FloatTensor, torch.FloatTensor]]:
         og_shape = x.shape[:-1]
         mu, std = self.dist_tracker(x)
         x = x.view(-1, 1, self.in_features) - mu[None, None, :]
         xgate = x.abs()
         thresh = self._get_thresholds(std)
-        mask = (
-            xgate > thresh
-        ).to(x.dtype)
+        mask = (xgate > thresh).to(x.dtype)
         if self.training:
-            bw=std[None, None, :]*0.1
+            bw = std[None, None, :] * 0.1
 
-            kernel = F.hardsigmoid(3*(xgate-thresh)/bw)
-            mask = mask + (kernel -kernel.detach())
-            nog_kernel = F.hardsigmoid(3*(xgate.detach()-thresh)/bw)
+            kernel = F.hardsigmoid(3 * (xgate - thresh) / bw)
+            mask = mask + (kernel - kernel.detach())
+            nog_kernel = F.hardsigmoid(3 * (xgate.detach() - thresh) / bw)
             grad_term = x + x.detach() * nog_kernel
-            x = (x * mask).detach() + (grad_term -grad_term.detach())
+            x = (x * mask).detach() + (grad_term - grad_term.detach())
             x = x + mu[None, None, :]
 
             y = torch.einsum(
@@ -199,13 +199,10 @@ class CWICLinear(nn.Module):
                 x.unsqueeze(-1),
             ).view(-1, self.out_features)
         else:
-            if math.prod(og_shape)==1:
-                y = smm(
-                    x,
-                    self.weight,
-                    thresh,
-                    stripe_size=self.stripe_size
-                ).view(-1, self.out_features)
+            if math.prod(og_shape) == 1 and smm is not None:
+                y = smm(x, self.weight, thresh, stripe_size=self.stripe_size).view(
+                    -1, self.out_features
+                )
                 y = y + self._get_post_mu()
             else:
                 x = x * mask
@@ -217,11 +214,15 @@ class CWICLinear(nn.Module):
                 ).view(-1, self.out_features)
                 y = y + self._get_post_mu()
 
-
         if self.bias is not None:
             y = y + self.bias[None]
 
-        return y.view(*og_shape, self.out_features), (torch.zeros(og_shape,device=y.device,dtype=torch.float32)+self.in_features*self.out_features,torch.zeros(og_shape,device=y.device,dtype=torch.float32)+self.in_features*self.out_features*mask.mean(-1).mean(-1).view(*og_shape))
+        return y.view(*og_shape, self.out_features), (
+            torch.zeros(og_shape, device=y.device, dtype=torch.float32)
+            + self.in_features * self.out_features,
+            torch.zeros(og_shape, device=y.device, dtype=torch.float32)
+            + self.in_features * self.out_features * mask.mean(-1).mean(-1).view(*og_shape),
+        )
 
 
 class CWICMLP(nn.Module):
@@ -245,35 +246,22 @@ class CWICMLP(nn.Module):
             in_features=in_features,
             out_features=inter_features,
             stripe_size=stripe_size,
-            bias=bias
+            bias=bias,
         )
 
-        self.up = Conv1D(
-            inter_features,
-            in_features
-        )
+        self.up = Conv1D(inter_features, in_features)
         assert not bias, "CWICMLP does not support bias due to the use of Conv1D"
-        
-        self.down = nn.Linear(
-            inter_features,
-            out_features,
-            bias
-        )
+
+        self.down = nn.Linear(inter_features, out_features, bias)
 
         self.dist_tracker = DistributionTracker(inter_features)
         self.mad_tracker = DistributionTracker(inter_features)
 
-        self.thresholds = nn.Parameter(
-            torch.zeros(inter_features)
-        )
-        
+        self.thresholds = nn.Parameter(torch.zeros(inter_features))
+
         self.act_fn = ACT2FN[hidden_act]
 
-
-    def forward(
-        self,
-        x: torch.FloatTensor
-    ) -> torch.FloatTensor:
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         og_shape = x.shape[:-1]
 
         x = x.view(-1, x.shape[-1])
@@ -287,24 +275,25 @@ class CWICMLP(nn.Module):
         mad, _ = self.mad_tracker(zgate)
 
         thresh = self.thresholds[None] * mad
-        mask = (
-            zgate > thresh
-        ).to(z.dtype)
+        mask = (zgate > thresh).to(z.dtype)
 
         if self.training:
-            bw=std[None, None, :]*0.1
+            bw = std[None, None, :] * 0.1
 
-            kernel = F.hardsigmoid(3*(zgate-thresh)/bw)
+            kernel = F.hardsigmoid(3 * (zgate - thresh) / bw)
             mask = mask + (kernel - kernel.detach())
-            nog_kernel = F.hardsigmoid(3*(zgate.detach()-thresh)/bw)
+            nog_kernel = F.hardsigmoid(3 * (zgate.detach() - thresh) / bw)
             grad_term = z + z.detach() * nog_kernel
-            z = (z * mask).detach() + (grad_term -grad_term.detach())
+            z = (z * mask).detach() + (grad_term - grad_term.detach())
         else:
             z = z * mask
 
+        y = self.down(self.up(x) * z).view(*og_shape, -1)
 
-        y = self.down(
-            self.up(x) * z
-        ).view(*og_shape, -1)
-
-        return y, (dense_parameters + (self.in_features + self.out_features) * self.inter_features,active_parameters + (self.in_features + self.out_features) * self.inter_features * mask.mean(-1).view(*og_shape))
+        return y, (
+            dense_parameters + (self.in_features + self.out_features) * self.inter_features,
+            active_parameters
+            + (self.in_features + self.out_features)
+            * self.inter_features
+            * mask.mean(-1).view(*og_shape),
+        )

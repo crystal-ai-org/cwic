@@ -716,7 +716,6 @@ class NNXRefractionBlockCollection(nnx.Module):
             rngs,
         )
 
-
     def __call__(
         self,
         hidden_states,
@@ -732,25 +731,28 @@ class NNXRefractionBlockCollection(nnx.Module):
         rkey=jax.random.key(7),
     ):
 
-        i =  jax.lax.with_sharding_constraint(jnp.zeros(()),None)
+        i = jax.lax.with_sharding_constraint(jnp.zeros(()), None)
 
         aux0 = {
-            LossKeys.FLOPS_BASE: jax.lax.with_sharding_constraint(jnp.array(0.0).astype(jnp.float32),None),
-            LossKeys.FLOPS_CWIC: jax.lax.with_sharding_constraint(jnp.zeros_like(hidden_states[..., 0]).astype(jnp.float32),
-                                                              PartitionSpec("dp", *([None] * (hidden_states.ndim - 2)))),
-            "in_bandwidth": jax.lax.with_sharding_constraint(jnp.array(0.0),None),
+            LossKeys.FLOPS_BASE: jax.lax.with_sharding_constraint(
+                jnp.array(0.0).astype(jnp.float32), None
+            ),
+            LossKeys.FLOPS_CWIC: jax.lax.with_sharding_constraint(
+                jnp.zeros_like(hidden_states[..., 0]).astype(jnp.float32),
+                PartitionSpec("dp", *([None] * (hidden_states.ndim - 2))),
+            ),
+            "in_bandwidth": jax.lax.with_sharding_constraint(jnp.array(0.0), None),
         }
-       
 
         hidden_states_and_aux = (hidden_states, aux0, i)
-        
+
         @nnx.split_rngs(splits=self.config.num_hidden_layers)
         @partial(
             nnx.scan, transform_metadata={nnx.PARTITION_NAME: None}
         )  # ,_shardings=(jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec(None,'dp', None,None)),None))
-        @partial(nnx.remat,prevent_cse=False)
+        @partial(nnx.remat, prevent_cse=False)
         def forward(x, block):
-            
+
             x = block(
                 x,
                 segment_ids,

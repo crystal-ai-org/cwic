@@ -7,7 +7,7 @@ authors = [
     "Niveditha Iyer <niveditha@crystalai.org>"]
 description = ""
 channels = ["conda-forge", "pytorch", "nvidia"]
-platforms = ["linux-64", "linux-aarch64"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 preview = ["pixi-build"]
 
 [pypi-dependencies]
@@ -43,3 +43,7 @@ cwic = { path = ".", editable = true }
 
 [dependencies]
 python = "==3.12"
+
+[target.osx-arm64.pypi-dependencies]
+# Pin JAX to CPU-only on Apple Silicon Macs
+jax = "*"

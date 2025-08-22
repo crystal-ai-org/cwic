@@ -1,27 +1,16 @@
 import math
 from typing import Optional
 
+import jax
+import jax.numpy as jnp
 from einops import rearrange
+from flax import nnx
+from flax.typing import Dtype, Initializer, PrecisionLike
+from jax import Array
+from jax.sharding import PartitionSpec
 
 from model_code.loss_names import LossKeys
 from model_code.utils import replace_grad
-
-from jax.sharding import PartitionSpec
-
-
-import jax
-import jax.numpy as jnp
-from jax import Array
-from functools import partial
-
-from flax import nnx
-
-from flax.typing import (
-    Dtype,
-    Initializer,
-    PrecisionLike,
-)
-
 
 EPS = 1e-7
 

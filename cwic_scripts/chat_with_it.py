@@ -1,27 +1,25 @@
-import re
-import torch
-
-import numpy as np
-import matplotlib.pyplot as plt
-from html import escape as html_escape
 import os
-from scipy.stats import norm
+from html import escape as html_escape
 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from termcolor import colored
 from transformers import pipeline
 
 from cwic_huggingface.modelling_cwic import CWICForCausalLM
 
-import matplotlib as mpl
+print("Starting chat with it...")
+device_map = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 OUTPUT_FOLDER = "./flop_diagrams"
-FR = 6 # Nx active parameter reduction over Llama-3.1-1B-Instruct
+FR = 3  # Nx active parameter reduction over Llama-3.1-1B-Instruct
 # NORMALIZER for flop coloring in terminal as well
 CHECKPOINT = {
     3: "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct",
     6: "crystal-ai/CWICLlama-3.2-1B-A206M-Instruct",
 }[FR]
-
-from termcolor import colored, cprint
 
 
 def show_flops(tokenizer, input_ids, flops):
@@ -40,41 +38,51 @@ def show_flops(tokenizer, input_ids, flops):
     # colors = colors - colors.mean()
     # colors = 0.5 * colors / (np.std(colors) + 0.0001)
     # colors = np.argsort(np.argsort(colors)) / colors.shape[0]
-    
-    colors = flops* FR / 2 # / flops.max()
+
+    colors = flops * FR / 2  # / flops.max()
     colors = colors.tolist()
+
     def terminal_escape(x):
         return x
-    
-    cmap = mpl.colormaps['YlGnBu']
-    cmap_fn = lambda x: str(tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5)[:3]))
-    def f(m,x):
-        
-        text=tokenizer.decode([m])
-        outs=[]
-        for t in text: #re.findall(u'(?:[\ud800-\udbff][\udc00-\udfff])|.',text):
-            esc=terminal_escape(t)
-            if t=="\n":
+
+    cmap = mpl.colormaps["YlGnBu"]
+    cmap_fn = lambda x: str(tuple(max(min(int(c * 255), 255), 0) for c in cmap(x * 0.5)[:3]))
+
+    def f(m, x):
+
+        text = tokenizer.decode([m])
+        outs = []
+        for t in text:  # re.findall(u'(?:[\ud800-\udbff][\udc00-\udfff])|.',text):
+            esc = terminal_escape(t)
+            if t == "\n":
                 outs.append(esc)
             else:
-                outs.append(colored(esc,(0,0,0),tuple(max(min(int(c* 255),255),0) for c in cmap(x*0.5))[:3]))
+                outs.append(
+                    colored(
+                        esc,
+                        (0, 0, 0),
+                        tuple(max(min(int(c * 255), 255), 0) for c in cmap(x * 0.5))[:3],
+                    )
+                )
         return "".join(outs)
 
-    print("".join(
+    print(
+        "".join(
             [
-                f(m,x)
+                f(m, x)
                 for m, x in zip(
                     input_ids,
                     [0.0] + colors[:-1],
                 )
             ]
-        ))
+        )
+    )
     html = (
         """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">"""
-        + "<pre style=\"background:white;\">"
+        + '<pre style="background:white;">'
         + "".join(
             [
                 f'<span style="font-family: Inter;font-optical-sizing: auto;font-weight: normal;font-style: normal; background-color: rgb{cmap_fn(c)};">{html_escape(tokenizer.decode([m]))}</span>'
@@ -91,26 +99,29 @@ def show_flops(tokenizer, input_ids, flops):
 
 
 def main():
-    
+
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
     torch.backends.cudnn.deterministic = True
+    print("Loading pipeline...")
+    model = CWICForCausalLM.from_pretrained(CHECKPOINT, device_map=device_map)
     pipe = pipeline(
         "text-generation",
-        model=CHECKPOINT,
-        device_map="cuda:0",
+        model=model,
+        tokenizer=CHECKPOINT,
+        device_map=device_map,
         torch_dtype=torch.float32,
     )
     print("Pipeline loaded successfully.")
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    
+
     ind = 0
     while True:
-        
+
         print(f"\n=== Example {ind} ===\n")
         my_message = input("Enter your message (or 'exit' to quit): ")
-        if my_message.lower().strip() == 'exit':
+        if my_message.lower().strip() == "exit":
             break
         print("\nThinking...")
 
@@ -124,7 +135,7 @@ def main():
             max_new_tokens=512,
         )
 
-        output_text = outputs[0]["generated_text"][-1]['content']
+        output_text = outputs[0]["generated_text"][-1]["content"]
 
         messages += [
             {
@@ -138,13 +149,11 @@ def main():
             tokenize=True,
             add_generation_prompt=False,
             return_tensors="pt",
-        ).to("cuda:0")
-        out = pipe.model(
-            input_ids=input_ids
-        )
+        ).to(device_map)
+        out = model(input_ids=input_ids, use_cache=False)
 
         input_ids = input_ids[0].detach().cpu().numpy()
-        flops = (out.active_parameters/out.dense_parameters)[0].detach().cpu().numpy()
+        flops = (out.active_parameters / out.dense_parameters)[0].detach().cpu().numpy()
 
         html = show_flops(pipe.tokenizer, input_ids, flops)
 
@@ -157,11 +166,10 @@ def main():
 
         np.save(
             os.path.join(OUTPUT_FOLDER, f"data_{ind}.npy"),
-            {"input_ids": input_ids, "flops": flops}
+            {"input_ids": input_ids, "flops": flops},
         )
 
         ind += 1
-
 
 
 if __name__ == "__main__":
