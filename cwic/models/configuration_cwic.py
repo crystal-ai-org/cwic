@@ -1,23 +1,4 @@
-# coding=utf-8
-# Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
-#
-# This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
-# and OPT implementations in this library. It has been modified from its
-# original forms to accommodate minor architectural differences compared
-# to GPT-NeoX and OPT used by the Meta AI team that trained the model.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""LLaMA model configuration"""
+""" CWIC Model Configuration """
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_rope_utils import rope_config_validation
@@ -25,7 +6,7 @@ from transformers.modeling_rope_utils import rope_config_validation
 
 class CWICConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`LlamaModel`]. It is used to instantiate an LLaMA
+    This is the configuration class to store the configuration of a [`CWICModel`]. It is used to instantiate a CWIC
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
     defaults will yield a similar configuration to that of the LLaMA-7B.
     e.g. [meta-llama/Llama-2-7b-hf](https://huggingface.co/meta-llama/Llama-2-7b-hf)
@@ -33,11 +14,13 @@ class CWICConfig(PretrainedConfig):
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
 
+    Based on the transformers Llama implementation:
+    https://github.com/huggingface/transformers/blob/508a7040556dc6b45f09174c662a9632284b2445/src/transformers/models/llama/configuration_llama.py#L26
 
     Args:
         vocab_size (`int`, *optional*, defaults to 32000):
-            Vocabulary size of the LLaMA model. Defines the number of different tokens that can be represented by the
-            `inputs_ids` passed when calling [`LlamaModel`]
+            Vocabulary size of the model. Defines the number of different tokens that can be represented by the
+            `inputs_ids` passed when calling [`CWICModel`]
         hidden_size (`int`, *optional*, defaults to 4096):
             Dimension of the hidden representations.
         intermediate_size (`int`, *optional*, defaults to 11008):
@@ -132,13 +115,13 @@ class CWICConfig(PretrainedConfig):
             The stripe size for the CWIC LM head.
 
     ```python
-    >>> from transformers import LlamaModel, LlamaConfig
+    >>> from transformers import CWICModel, CWICConfig
 
     >>> # Initializing a LLaMA llama-7b style configuration
-    >>> configuration = LlamaConfig()
+    >>> configuration = CWICConfig()
 
     >>> # Initializing a model from the llama-7b style configuration
-    >>> model = LlamaModel(configuration)
+    >>> model = CWICModel(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
@@ -171,8 +154,8 @@ class CWICConfig(PretrainedConfig):
         attention_dropout=0.0,
         mlp_bias=False,
         head_dim=None,
-        stripe_size=1,
-        head_stripe_size=1,
+        num_stripes=1,
+        num_head_stripes=1,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -206,8 +189,10 @@ class CWICConfig(PretrainedConfig):
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
         rope_config_validation(self)
 
-        self.stripe_size = stripe_size
-        self.head_stripe_size = head_stripe_size
+        self.num_stripes = num_stripes
+        self.num_head_stripes = num_head_stripes
+
+        assert not tie_word_embeddings, "Tying word embeddings is not supported in CWIC models."
 
         super().__init__(
             pad_token_id=pad_token_id,

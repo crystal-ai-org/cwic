@@ -1,26 +1,8 @@
-# coding=utf-8
-# Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
-#
-# This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
-# and OPT implementations in this library. It has been modified from its
-# original forms to accommodate minor architectural differences compared
-# to GPT-NeoX and OPT used by the Meta AI team that trained the model.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-import math
+""" CWIC Model Definitions """
+
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, Union
-
+import math
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
@@ -29,14 +11,7 @@ from transformers.generation import GenerationMixin
 from transformers.integrations import use_kernel_forward_from_hub
 from transformers.masking_utils import create_causal_mask
 from transformers.modeling_layers import (
-    GenericForQuestionAnswering,
-    GenericForSequenceClassification,
-    GenericForTokenClassification,
     GradientCheckpointingLayer,
-)
-from transformers.modeling_outputs import (
-    BaseModelOutputWithPast,
-    CausalLMOutputWithPast,
 )
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
@@ -50,90 +25,28 @@ from transformers.utils import (
 from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
 
-from .configuration_cwic import CWICConfig
-from .modules_cwic import CWICMLP, CWICLinear
+from models.configuration_cwic import CWICConfig
+from models.modules import (
+    CWICLinear,
+    CWICMLP
+)
+from models.outputs import (
+    BaseModelOutputWithPastAndActiveParameters,
+    CausalLMOutputWithPastAndActiveParameters
+)
+
 
 logger = logging.get_logger(__name__)
-
-
-@dataclass
-class BaseModelOutputWithPastAndActiveParameters(BaseModelOutputWithPast):
-    """
-    Base class for model's outputs that may also contain a past key/values (to speed up sequential decoding).
-
-    Args:
-        last_hidden_state (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`):
-            Sequence of hidden-states at the output of the last layer of the model.
-
-            If `past_key_values` is used only the last hidden-state of the sequences of shape `(batch_size, 1,
-            hidden_size)` is output.
-        past_key_values (`Cache`, *optional*, returned when `use_cache=True` is passed or when `config.use_cache=True`):
-            It is a [`~cache_utils.Cache`] instance. For more details, see our [kv cache guide](https://huggingface.co/docs/transformers/en/kv_cache).
-
-            Contains pre-computed hidden-states (key and values in the self-attention blocks and optionally if
-            `config.is_encoder_decoder=True` in the cross-attention blocks) that can be used (see `past_key_values`
-            input) to speed up sequential decoding.
-        hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(torch.FloatTensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-        active_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
-            Sequence of active_parameters.
-    """
-
-    active_parameters: Optional[torch.FloatTensor] = None
-    dense_parameters: Optional[torch.FloatTensor] = None
-
-
-@dataclass
-class CausalLMOutputWithPastAndActiveParameters(CausalLMOutputWithPast):
-    """
-    Base class for causal language model (or autoregressive) outputs.
-
-    Args:
-        loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
-            Language modeling loss (for next-token prediction).
-        compute_loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `compute_target` is provided):
-            Compute reduction loss.
-        logits (`torch.FloatTensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
-            Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
-        past_key_values (`Cache`, *optional*, returned when `use_cache=True` is passed or when `config.use_cache=True`):
-            It is a [`~cache_utils.Cache`] instance. For more details, see our [kv cache guide](https://huggingface.co/docs/transformers/en/kv_cache).
-
-            Contains pre-computed hidden-states (key and values in the self-attention blocks) that can be used (see
-            `past_key_values` input) to speed up sequential decoding.
-        hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(torch.FloatTensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-        active_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
-            Sequence of active_parameters.
-    """
-
-    active_parameters: Optional[torch.FloatTensor] = None
-    dense_parameters: Optional[torch.FloatTensor] = None
-    compute_loss: Optional[torch.FloatTensor] = None
-
+    
 
 @use_kernel_forward_from_hub("RMSNorm")
 class LlamaRMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
         LlamaRMSNorm is equivalent to T5LayerNorm
+
+        Taken from the transformers Llama implementation:
+        https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L53
         """
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
@@ -154,6 +67,10 @@ class LlamaRotaryEmbedding(nn.Module):
     inv_freq: torch.Tensor  # fix linting for `register_buffer`
 
     def __init__(self, config: CWICConfig, device=None):
+        """
+        Taken from the transformers Llama implementation:
+        https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L73
+        """
         super().__init__()
         # BC: "rope_type" was originally "type"
         if hasattr(config, "rope_scaling") and isinstance(config.rope_scaling, dict):
@@ -224,22 +141,6 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     return q_embed, k_embed
 
 
-class LlamaMLP(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.hidden_size = config.hidden_size
-        self.intermediate_size = config.intermediate_size
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.mlp_bias)
-        self.act_fn = ACT2FN[config.hidden_act]
-
-    def forward(self, x):
-        down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-        return down_proj
-
-
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     """
     This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
@@ -281,7 +182,11 @@ def eager_attention_forward(
 
 
 class CWICAttention(nn.Module):
-    """Multi-headed attention from 'Attention Is All You Need' paper"""
+    """Multi-headed attention from 'Attention Is All You Need' paper
+    
+    Based on the transformers Llama implementation:
+    https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L197
+    """
 
     def __init__(self, config: CWICConfig, layer_idx: int):
         super().__init__()
@@ -295,6 +200,7 @@ class CWICAttention(nn.Module):
         self.attention_dropout = config.attention_dropout
         self.is_causal = True
 
+        # we merge Q, K, and V to improve efficiency and lower overhead
         self.qkv_splits = [
             config.num_attention_heads * self.head_dim,
             config.num_key_value_heads * self.head_dim,
@@ -321,17 +227,19 @@ class CWICAttention(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_values: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
 
-        qkv_states, (dense_parameters, active_parameters) = self.qkv_proj(hidden_states)
-        qkv_states = qkv_states.split(self.qkv_splits, dim=-1)
+        qkv_states, (qkv_dense_parameters, qkv_active_parameters) = self.qkv_proj(hidden_states)
+        query_states, key_states, value_states = qkv_states.split(self.qkv_splits, dim=-1)
 
-        query_states = qkv_states[0].view(hidden_shape).transpose(1, 2)
-        key_states = qkv_states[1].view(hidden_shape).transpose(1, 2)
-        value_states = qkv_states[2].view(hidden_shape).transpose(1, 2)
+        query_states = query_states.view(hidden_shape).transpose(1, 2)
+        key_states = key_states.view(hidden_shape).transpose(1, 2)
+        value_states = value_states.view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -359,16 +267,20 @@ class CWICAttention(nn.Module):
         )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-        attn_output, (o_dense_parameters, o_active_parameters) = self.o_proj(attn_output)
-        return (
-            attn_output,
-            (dense_parameters + o_dense_parameters, active_parameters + o_active_parameters),
-            attn_weights,
-        )
+        attn_output, (o_dense_params, o_active_params) = self.o_proj(attn_output, statistics_mask=statistics_mask)
+        
+        dense_params = qkv_dense_params + o_dense_params
+        active_params = qkv_active_params + o_active_params
+        
+        return attn_output, attn_weights, (dense_params, active_params)
 
 
 class CWICDecoderLayer(GradientCheckpointingLayer):
     def __init__(self, config: CWICConfig, layer_idx: int):
+        """
+        Based on the transformers Llama implementation:
+        https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L268
+        """
         super().__init__()
         self.hidden_size = config.hidden_size
 
@@ -378,7 +290,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
             in_features=config.hidden_size,
             inter_features=config.intermediate_size,
             out_features=config.hidden_size,
-            stripe_size=config.stripe_size,
+            num_stripes=config.num_stripes,
             hidden_act=config.hidden_act,
             bias=config.mlp_bias,
         )
@@ -394,23 +306,15 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
+        statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor,]:
+
         residual = hidden_states
-        dense_parameters = (
-            torch.ones(hidden_states.shape[:-1], device=hidden_states.device, dtype=torch.float32)
-            * 2
-        )
-        active_parameters = (
-            torch.ones(hidden_states.shape[:-1], device=hidden_states.device, dtype=torch.float32)
-            * 2
-        )
         hidden_states = self.input_layernorm(hidden_states)
         # Self Attention
-        hidden_states, (attn_dense_parameters, attn_active_parameters), _ = self.self_attn(
+        hidden_states, _, (attn_dense_params, attn_active_params) = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -418,26 +322,29 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
             use_cache=use_cache,
             cache_position=cache_position,
             position_embeddings=position_embeddings,
+            statistics_mask=statistics_mask,
             **kwargs,
         )
-        dense_parameters = dense_parameters + attn_dense_parameters
-        active_parameters = active_parameters + attn_active_parameters
         hidden_states = residual + hidden_states
 
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states, (mlp_dense_parameters, mlp_active_parameters) = self.mlp(hidden_states)
-
-        dense_parameters = dense_parameters + mlp_dense_parameters
-        active_parameters = active_parameters + mlp_active_parameters
-
+        hidden_states, (mlp_dense_params, mlp_active_params) = self.mlp(hidden_states, statistics_mask=statistics_mask)
         hidden_states = residual + hidden_states
-        return hidden_states, (dense_parameters, active_parameters)
+
+        dense_params = attn_dense_params + mlp_dense_params
+        active_params = attn_active_params + mlp_active_params
+
+        return hidden_states, (dense_params, active_params)
 
 
 @auto_docstring
 class CWICPreTrainedModel(PreTrainedModel):
+    """
+    Based on the transformers Llama implementation:
+    https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L315
+    """
     config: CWICConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -458,6 +365,10 @@ class CWICPreTrainedModel(PreTrainedModel):
 @auto_docstring
 class CWICModel(CWICPreTrainedModel):
     def __init__(self, config: CWICConfig):
+        """
+        Based on the transformers Llama implementation:
+        https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L334
+        """
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
@@ -478,50 +389,38 @@ class CWICModel(CWICPreTrainedModel):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
-        input_mask: Optional[torch.BoolTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = None,
+        statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
     ) -> BaseModelOutputWithPastAndActiveParameters:
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
+
         if inputs_embeds is None:
-            inputs_embeds = self.embed_tokens(input_ids)
-        assert inputs_embeds is not None
+            inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
 
-        if input_mask is None:
-            input_mask = torch.ones_like(input_ids, device=input_ids.device, dtype=torch.bool)  # type: ignore
-        assert input_mask is not None
-        dense_parameters = (
+        dense_params = (
             torch.ones(inputs_embeds.shape[:-1], device=inputs_embeds.device, dtype=torch.float32)
-            * self.config.hidden_size
+            * 2
         )
-        active_parameters = (
+        active_params = (
             torch.ones(inputs_embeds.shape[:-1], device=inputs_embeds.device, dtype=torch.float32)
-            * self.config.hidden_size
+            * 2
         )
+
         if use_cache and past_key_values is None:
-            import transformers
-            from packaging.version import Version
-
-            if Version(transformers.__version__) > Version("4.55.2"):
-                past_key_values = DynamicCache(config=self.config)
-            else:
-                past_key_values = DynamicCache()
+            past_key_values = DynamicCache()
 
         if cache_position is None:
-            past_seen_tokens = (
-                past_key_values.get_seq_length() if past_key_values is not None else 0
-            )
-            cache_position = torch.arange(
-                past_seen_tokens,
-                past_seen_tokens + inputs_embeds.shape[1],
-                device=inputs_embeds.device,
+            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
+            cache_position: torch.Tensor = torch.arange(
+                past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
             )
 
         if position_ids is None:
@@ -540,25 +439,25 @@ class CWICModel(CWICPreTrainedModel):
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
-            hidden_states, (layer_dense_parameters, layer_active_parameters) = decoder_layer(
+            hidden_states, (layer_dense_params, layer_active_params)  = decoder_layer(
                 hidden_states,
-                input_mask=input_mask,
                 attention_mask=causal_mask,
                 position_ids=position_ids,
                 past_key_values=past_key_values,
                 cache_position=cache_position,
                 position_embeddings=position_embeddings,
+                statistics_mask=statistics_mask,
                 **kwargs,
             )
-            dense_parameters = dense_parameters + layer_dense_parameters
-            active_parameters = active_parameters + layer_active_parameters
+            dense_params = dense_params + layer_dense_params
+            active_params = active_params + layer_active_params
 
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
-            dense_parameters=dense_parameters,
-            active_parameters=active_parameters,
+            dense_parameters=dense_params,
+            active_parameters=active_params,
         )
 
 
@@ -592,7 +491,6 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
-        input_mask: Optional[torch.BoolTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
@@ -601,16 +499,18 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         use_cache: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
+        statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
     ) -> CausalLMOutputWithPastAndActiveParameters:
         r"""
         Example:
 
         ```python
-        >>> from transformers import AutoTokenizer, LlamaForCausalLM
+        >>> from transformers import AutoTokenizer
+        >>> from cwic.models.modelling_cwic import CWICForCausalLM
 
-        >>> model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
-        >>> tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+        >>> model = CWICForCausalLM.from_pretrained(...)
+        >>> tokenizer = AutoTokenizer.from_pretrained(...)
 
         >>> prompt = "Hey, are you conscious? Can you talk to me?"
         >>> inputs = tokenizer(prompt, return_tensors="pt")
@@ -622,13 +522,13 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         ```"""
         outputs: BaseModelOutputWithPastAndActiveParameters = self.model(
             input_ids=input_ids,
-            input_mask=input_mask,
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             cache_position=cache_position,
+            statistics_mask=statistics_mask,
             **kwargs,
         )
 
@@ -660,29 +560,9 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         )
 
 
-class CWICForSequenceClassification(GenericForSequenceClassification, CWICPreTrainedModel): ...
-
-
-class CWICForQuestionAnswering(GenericForQuestionAnswering, CWICPreTrainedModel):
-    base_model_prefix = "transformer"  # For BC, where `transformer` was used instead of `model`
-
-
-class CWICForTokenClassification(GenericForTokenClassification, CWICPreTrainedModel): ...
-
-
 # Register CWIC
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 AutoConfig.register("cwic", CWICConfig)
 AutoModel.register(CWICConfig, CWICForCausalLM)
 AutoModelForCausalLM.register(CWICConfig, CWICForCausalLM)
-
-__all__ = [
-    "CWICDecoderLayer",
-    "CWICForCausalLM",
-    "CWICModel",
-    "CWICPreTrainedModel",
-    "CWICForSequenceClassification",
-    "CWICForQuestionAnswering",
-    "CWICForTokenClassification",
-]

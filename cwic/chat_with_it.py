@@ -1,5 +1,9 @@
 import os
 from html import escape as html_escape
+from scipy.stats import norm
+
+from cwic_huggingface.modelling_cwic import CWICForCausalLM
+from transformers import pipeline
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -8,7 +12,6 @@ import torch
 from termcolor import colored
 from transformers import pipeline
 
-from cwic_huggingface.modelling_cwic import CWICForCausalLM
 
 print("Starting chat with it...")
 device_map = "cuda:0" if torch.cuda.is_available() else "cpu"
