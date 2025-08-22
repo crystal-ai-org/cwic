@@ -68,32 +68,7 @@ def flop_loss_fn(
     target_ratio: float = 2.0,
     mask: Optional[torch.Tensor] = None,
 ):
-    bs = active_params.shape[0]
-
-    loss = 0
-    iratio = 0
-    for i in range(bs):
-        
-        curr_loss,c = torch.utils.checkpoint.checkpoint(
-            _flop_loss_fn,
-            active_params[i],
-            dense_params[i],
-            target_ratio,
-            (mask[i] if mask is not None else None),
-            use_reentrant=False,
-        )
-        loss = loss + curr_loss
-        iratio = iratio + 1/c
-
-    return loss / bs, 1/iratio*bs
-
-
-def _flop_loss_fn(
-    active_params: torch.Tensor,
-    dense_params: torch.Tensor,
-    target_ratio: float = 2.0,
-    mask: Optional[torch.Tensor] = None,
-):
+    # print(active_params,dense_params)
     if mask is not None:
         active_per_token = (active_params * mask).mean()
         dense_per_token = (dense_params * mask).mean()
