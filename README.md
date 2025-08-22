@@ -34,7 +34,7 @@ This will let you chat with one of our [**Pretrained Models**](#pretrained-model
 Note: this might take a few minutes the first time you run it as it will download HuggingFace checkpoints.
 
 The model output is highlighted to indicate the amount of compute spent on each. Darker blue indicates more compute, lighter yellow indicates less compute. Here is an example from a run where we requested Python code for the Fibonacci Series:
-![chat_terminal.png](assets/chat_terminal.png)
+![CWIC_Inference.png](assets/CWIC_Inference.png)
 (If on MacOS, it's recommended to run this script in a code editor terminal. Running it in Terminal doesn't seem to display the highlights.)
 
 ### Training
