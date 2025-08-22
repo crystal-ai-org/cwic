@@ -9,10 +9,11 @@ class _ScaleGradient(torch.autograd.Function):
     def forward(ctx, x, scale):
         ctx.scale = scale
         return x.clone()
-    
+
     @staticmethod
     def backward(ctx, grad_output):
         return grad_output * ctx.scale, None
+
 
 def scale_gradient(x, scale):
     return _ScaleGradient.apply(x, scale)
@@ -25,13 +26,14 @@ def scale_gradient(x, scale):
 #         out = src.clone()
 #         out.requires_grad = True
 #         return out
-    
+
 #     @staticmethod
 #     def backward(ctx, grad_output):
 #         return grad_output, grad_output
 
 # def attach_gradient(tgt, src):
 #     return _AttachGradient.apply(tgt, src)
+
 
 def attach_gradient(tgt, src):
     return src + (tgt - tgt.detach())

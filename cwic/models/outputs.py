@@ -39,7 +39,7 @@ class BaseModelOutputWithPastAndActiveParameters(BaseModelOutputWithPast):
         active_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
             The number of active parameters for each token in the batch.
         dense_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
-            The number of dense parameters (as in, the total number of parameters that would be used without sparsity) for each token in the batch. 
+            The number of dense parameters (as in, the total number of parameters that would be used without sparsity) for each token in the batch.
 
             Always the same for each token, and should not change during training.
     """
@@ -79,11 +79,10 @@ class CausalLMOutputWithPastAndActiveParameters(CausalLMOutputWithPast):
         active_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
             The number of active parameters for each token in the batch.
         dense_parameters (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
-            The number of dense parameters (as in, the total number of parameters that would be used without sparsity) for each token in the batch. 
+            The number of dense parameters (as in, the total number of parameters that would be used without sparsity) for each token in the batch.
 
             Always the same for each token, and should not change during training.
     """
 
     active_parameters: Optional[Tensor] = None
     dense_parameters: Optional[Tensor] = None
-    

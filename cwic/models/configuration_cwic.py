@@ -1,4 +1,4 @@
-""" CWIC Model Configuration """
+"""CWIC Model Configuration"""
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_rope_utils import rope_config_validation
@@ -213,7 +213,7 @@ class CWICConfig(PretrainedConfig):
         self.threshold_lr_scale = threshold_lr_scale
         self.threshold_init = threshold_init
         self.threshold_minimum = threshold_minimum
-        
+
         self.bandwidth = bandwidth
         self.stats_beta = stats_beta
         self.median_iters = median_iters

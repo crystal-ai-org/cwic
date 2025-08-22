@@ -1,1 +1,1 @@
-""" Utilities for CWIC """
+"""Utilities for CWIC"""

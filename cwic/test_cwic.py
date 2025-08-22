@@ -8,9 +8,12 @@ from models.modelling_cwic import CWICForCausalLM
 
 
 def main():
-    
+
     messages = [
-        {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
+        {
+            "role": "system",
+            "content": "You are a pirate chatbot who always responds in pirate speak!",
+        },
         {"role": "user", "content": "Who are you?"},
     ]
 
@@ -27,16 +30,12 @@ def main():
         max_new_tokens=16,
         do_sample=False,
     )
-    og_outputs = outputs[0]["generated_text"][-1]['content']
+    og_outputs = outputs[0]["generated_text"][-1]["content"]
     print("\n === Reference Output ===")
     print(og_outputs)
     print("")
 
-    cwic_model = llama_to_cwic(
-        pipe.model,
-        num_stripes=4,
-        num_head_stripes=7
-    )
+    cwic_model = llama_to_cwic(pipe.model, num_stripes=4, num_head_stripes=7)
     cwic_model.eval()
     print("CWIC Model Converted!")
 
@@ -47,11 +46,11 @@ def main():
         max_new_tokens=16,
         do_sample=False,
     )
-    cwic_outputs = outputs[0]["generated_text"][-1]['content']
+    cwic_outputs = outputs[0]["generated_text"][-1]["content"]
     print("\n === CWIC Output ===")
     print(cwic_outputs)
     print("")
-    
+
     print(f"Outputs match: {og_outputs == cwic_outputs}")
 
 

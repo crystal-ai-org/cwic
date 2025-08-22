@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-        
+
 def kd_loss_fn(
     student_logits: torch.Tensor,
     teacher_logits: torch.Tensor,
@@ -14,7 +14,7 @@ def kd_loss_fn(
 
     loss = 0
     for i in range(bs):
-        
+
         curr_loss = torch.utils.checkpoint.checkpoint(
             _kd_loss_fn,
             student_logits[i],
@@ -27,11 +27,7 @@ def kd_loss_fn(
     return loss / bs
 
 
-def _kd_loss_fn(
-    student_logits,
-    teacher_logits,
-    mask=None
-):
+def _kd_loss_fn(student_logits, teacher_logits, mask=None):
     teacher_logits = teacher_logits.to(student_logits.dtype)
 
     if mask is not None:
@@ -45,17 +41,17 @@ def _kd_loss_fn(
         input=student_logits,
         target=teacher_logits,
         log_target=True,
-        reduction='batchmean',
+        reduction="batchmean",
     )
     fkl = F.kl_div(
         input=teacher_logits,
         target=student_logits,
         log_target=True,
-        reduction='batchmean',
+        reduction="batchmean",
     )
 
     loss = (rkl + fkl) / 2
-    
+
     if mask is not None:
         return loss / mask.mean()
     else:

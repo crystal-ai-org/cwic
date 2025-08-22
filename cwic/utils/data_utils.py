@@ -7,15 +7,14 @@ class DeviceCollator:
 
     def __init__(self, device=None):
         if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.device = device
-
 
     def __call__(self, batch):
 
         out = []
-        for b in  batch:
+        for b in batch:
 
             curr_out = {}
             for k, v in b.items():

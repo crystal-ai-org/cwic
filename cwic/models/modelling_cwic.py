@@ -1,4 +1,4 @@
-""" CWIC Model Definitions """
+"""CWIC Model Definitions"""
 
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, Union
@@ -26,18 +26,15 @@ from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
 
 from models.configuration_cwic import CWICConfig
-from models.modules import (
-    CWICLinear,
-    CWICMLP
-)
+from models.modules import CWICLinear, CWICMLP
 from models.outputs import (
     BaseModelOutputWithPastAndActiveParameters,
-    CausalLMOutputWithPastAndActiveParameters
+    CausalLMOutputWithPastAndActiveParameters,
 )
 
 
 logger = logging.get_logger(__name__)
-    
+
 
 @use_kernel_forward_from_hub("RMSNorm")
 class LlamaRMSNorm(nn.Module):
@@ -183,7 +180,7 @@ def eager_attention_forward(
 
 class CWICAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper
-    
+
     Based on the transformers Llama implementation:
     https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L197
     """
@@ -281,11 +278,13 @@ class CWICAttention(nn.Module):
         )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-        attn_output, (o_dense_parameters, o_active_parameters) = self.o_proj(attn_output, statistics_mask=statistics_mask)
-        
+        attn_output, (o_dense_parameters, o_active_parameters) = self.o_proj(
+            attn_output, statistics_mask=statistics_mask
+        )
+
         dense_parameters = qkv_dense_parameters + o_dense_parameters
         active_parameters = qkv_active_parameters + o_active_parameters
-        
+
         return attn_output, attn_weights, (dense_parameters, active_parameters)
 
 
@@ -321,17 +320,19 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
     @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
     def forward(
         self,
-        hidden_states_and_param_counts: tuple[torch.Tensor,torch.Tensor,torch.Tensor],
+        hidden_states_and_param_counts: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[
+            tuple[torch.Tensor, torch.Tensor]
+        ] = None,  # necessary, but kept here for BC
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        hidden_states, dense_params,active_params = hidden_states_and_param_counts
+        hidden_states, dense_params, active_params = hidden_states_and_param_counts
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         # Self Attention
@@ -351,7 +352,9 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states, (mlp_dense_params, mlp_active_params) = self.mlp(hidden_states, statistics_mask=statistics_mask)
+        hidden_states, (mlp_dense_params, mlp_active_params) = self.mlp(
+            hidden_states, statistics_mask=statistics_mask
+        )
         hidden_states = residual + hidden_states
 
         layer_dense_params = attn_dense_params + mlp_dense_params
@@ -369,6 +372,7 @@ class CWICPreTrainedModel(PreTrainedModel):
     Based on the transformers Llama implementation:
     https://github.com/huggingface/transformers/blob/41d17178827455e7b6553a7026d71d3036ef719c/src/transformers/models/llama/modeling_llama.py#L315
     """
+
     config: CWICConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -388,11 +392,9 @@ class CWICPreTrainedModel(PreTrainedModel):
     @torch.no_grad()
     def clip_thresholds(self):
         for m in self.modules():
-            
+
             if isinstance(m, (CWICLinear, CWICMLP)):
-                m.thresholds.data.clamp_(
-                    min=m.threshold_minimum
-                )
+                m.thresholds.data.clamp_(min=m.threshold_minimum)
 
 
 @auto_docstring
@@ -434,7 +436,6 @@ class CWICModel(CWICPreTrainedModel):
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
-
         if inputs_embeds is None:
             inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
 
@@ -451,9 +452,13 @@ class CWICModel(CWICPreTrainedModel):
             past_key_values = DynamicCache()
 
         if cache_position is None:
-            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
+            past_seen_tokens = (
+                past_key_values.get_seq_length() if past_key_values is not None else 0
+            )
             cache_position: torch.Tensor = torch.arange(
-                past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
+                past_seen_tokens,
+                past_seen_tokens + inputs_embeds.shape[1],
+                device=inputs_embeds.device,
             )
 
         if position_ids is None:
@@ -468,7 +473,7 @@ class CWICModel(CWICPreTrainedModel):
             position_ids=position_ids,
         )
         hidden_states = inputs_embeds
-        hidden_states_and_param_counts = hidden_states, dense_params,active_params
+        hidden_states_and_param_counts = hidden_states, dense_params, active_params
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
@@ -482,7 +487,7 @@ class CWICModel(CWICPreTrainedModel):
                 statistics_mask=statistics_mask,
                 **kwargs,
             )
-        hidden_states, dense_params,active_params =hidden_states_and_param_counts
+        hidden_states, dense_params, active_params = hidden_states_and_param_counts
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(
             last_hidden_state=hidden_states,

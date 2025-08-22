@@ -26,17 +26,15 @@ from utils.loss_utils import (
 logger = logging.get_logger(__name__)
 
 
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Running on", DEVICE)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="default")
 def main(config: omegaconf.DictConfig):
-    
+
     # Load the dataset
-    dataset = datasets.load_dataset(
-        **config.dataset
-    )
+    dataset = datasets.load_dataset(**config.dataset)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=config.batch_size,
@@ -55,7 +53,7 @@ def main(config: omegaconf.DictConfig):
     logger.info(f"Loaded teacher model {config.teacher_model}!")
 
     # convert the teacher model to CWIC format
-    student_model = llama_to_cwic(teacher_model,**config.model)
+    student_model = llama_to_cwic(teacher_model, **config.model)
     # we keep the teacher model in its original format (important for some models)
     # but CWIC works best in float32
     student_model = student_model.to(torch.float32)
@@ -63,21 +61,17 @@ def main(config: omegaconf.DictConfig):
     student_model.gradient_checkpointing_enable()
     logger.info("Converted teacher model to CWIC format!")
 
-    optimizer = torch.optim.AdamW(
-        student_model.parameters(),
-        **config.optimizer
+    optimizer = torch.optim.AdamW(student_model.parameters(), **config.optimizer)
+    lr_scheduler = get_scheduler(optimizer=optimizer, **config.lr_scheduler)
+    logger.info(
+        f"Initialized AdamW optimizer and {config.lr_scheduler.name} learning rate scheduler!"
     )
-    lr_scheduler = get_scheduler(
-        optimizer=optimizer,
-        **config.lr_scheduler
-    )
-    logger.info(f"Initialized AdamW optimizer and {config.lr_scheduler.name} learning rate scheduler!")
 
     wandb.init(
         project="cwic",
         entity=config.wandb_entity,
         name=config.run_name,
-        config=omegaconf.OmegaConf.to_container(config, resolve=True)
+        config=omegaconf.OmegaConf.to_container(config, resolve=True),
     )
     logger.info("Starting Training!")
 
@@ -85,34 +79,31 @@ def main(config: omegaconf.DictConfig):
     step = 0
 
     for batch in dataloader:
-        mask = batch['pad_mask.npy'].float()
+        mask = batch["pad_mask.npy"].float()
 
         with torch.no_grad():
             teacher_output = teacher_model(
-                input_ids=batch['input_ids.npy'],
+                input_ids=batch["input_ids.npy"],
             )
         student_output = student_model(
-            input_ids=batch['input_ids.npy'],
+            input_ids=batch["input_ids.npy"],
             statistics_mask=mask,
         )
 
         compute_gain = config.end_compute_reduction - config.start_compute_reduction
         target_ratio = config.start_compute_reduction + compute_gain * np.clip(
-            step / config.compute_reduction_steps,
-            a_min=0.0, a_max=1.0
+            step / config.compute_reduction_steps, a_min=0.0, a_max=1.0
         )
 
         flop_loss, flop_reduction = flop_loss_fn(
             student_output.active_parameters,
             student_output.dense_parameters,
             target_ratio=target_ratio,
-            mask=mask
+            mask=mask,
         )
         flop_loss.backward(retain_graph=True)
         kd_loss = kd_loss_fn(
-            student_output.logits,
-            teacher_output.logits.to(student_output.logits.dtype),
-            mask=mask
+            student_output.logits, teacher_output.logits.to(student_output.logits.dtype), mask=mask
         )
         kd_loss.backward()
 
@@ -147,7 +138,7 @@ def main(config: omegaconf.DictConfig):
 
         if step % config.checkpoint_interval == 0:
             logger.info(f"Saving checkpoint at step {step}...")
-            
+
             ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
 
             student_model.save_pretrained(ckpt_path)

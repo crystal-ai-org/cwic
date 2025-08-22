@@ -2,9 +2,9 @@
 run_name: cwic_train
 wandb_entity: euler-ai
 
-teacher_model: meta-llama/Llama-3.2-1B-Instruct
+teacher_model: unsloth/Llama-3.2-1B-Instruct
 
-batch_size: 4
+batch_size: 16
 
 checkpoint_interval: 1000
 
@@ -33,7 +33,7 @@ dataset:
 
 optimizer:
 
-  lr: 1e-5
+  lr: 0.00004898979485566357
   weight_decay: 0.01
 
   betas: [0.9, 0.95]
