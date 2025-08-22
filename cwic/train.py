@@ -73,7 +73,8 @@ def main(config: omegaconf.DictConfig):
     logger.info(f"Initialized AdamW optimizer and {config.lr_scheduler.name} learning rate scheduler!")
 
     wandb.init(
-        project="CWIC-torch",
+        project="cwic",
+        entity=config.wandb_entity,
         name=config.run_name,
         config=omegaconf.OmegaConf.to_container(config, resolve=True)
     )
@@ -132,11 +133,11 @@ def main(config: omegaconf.DictConfig):
 
         wandb.log(
             {
-                "loss": loss.item(),
-                "kd_loss": kd_loss.item(),
-                "flop_loss": flop_loss.item(),
-                "flop_reduction": flop_reduction.item(),
-                "flop_reduction_target": target_ratio,
+                "kd_loss/combined": loss.item(),
+                "kd_loss/logits/twoway": kd_loss.item(),
+                "flop_loss/combined": flop_loss.item(),
+                "flop_ratios/combined": flop_reduction.item(),
+                "target_flop_reduction": target_ratio,
             },
         )
 

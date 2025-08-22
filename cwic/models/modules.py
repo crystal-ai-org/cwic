@@ -75,7 +75,7 @@ class CWICLinear(nn.Module):
             (threshold_init / self.threshold_lr_scale)
         )
 
-        self.distribution_tracker = RobustDistributionTracker(
+        self.dist_tracker = RobustDistributionTracker(
             self.in_features,
             beta=stats_beta,
             num_iters=median_iters,
@@ -102,7 +102,7 @@ class CWICLinear(nn.Module):
          - `O`: output features
         """
         
-        mu, std = self.distribution_tracker(
+        mu, std = self.dist_tracker(
             x,
             statistics_mask=statistics_mask
         )
@@ -219,7 +219,7 @@ class CWICMLP(nn.Module):
 
         self.act_fn = ACT2FN[hidden_act]
 
-        self.distribution_tracker = RobustDistributionTracker(
+        self.dist_tracker = RobustDistributionTracker(
             inter_features,
             beta=stats_beta,
             num_iters=median_iters,
@@ -242,7 +242,7 @@ class CWICMLP(nn.Module):
         z, gate_dense_params, gate_active_params = self.gate(x, statistics_mask=statistics_mask)
         z = self.act_fn(z)
 
-        std = self.distribution_tracker(
+        std = self.dist_tracker(
             z,
             statistics_mask=statistics_mask
         )[1]
@@ -311,10 +311,10 @@ class RobustDistributionTracker(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        self.beta = beta
         self.num_iters = num_iters
         self.eps = eps
 
+        self.register_buffer("beta", torch.tensor(beta, dtype=torch.float32))
         self.register_buffer(
             "steps",
             torch.zeros((), dtype=torch.float32),
@@ -327,10 +327,13 @@ class RobustDistributionTracker(nn.Module):
             persistent=True
         )
         self.register_buffer(
-            "aad",
+            "upp",
             torch.zeros((hidden_size,), dtype=torch.float32),
             persistent=True
         )
+        self.register_buffer("adj_med_computed", torch.zeros((hidden_size,), dtype=torch.float32))
+        self.register_buffer("adj_std_computed", torch.zeros((hidden_size,), dtype=torch.float32))
+
 
 
     def forward(
@@ -343,14 +346,15 @@ class RobustDistributionTracker(nn.Module):
         if self.training and torch.is_grad_enabled():
             with torch.no_grad():
 
-                self.steps += 1.0
-                debiaser = 1 / (1 - self.beta ** self.steps)
-
                 x = x.view(-1, self.hidden_size)
                 if statistics_mask is not None:
                     statistics_mask = statistics_mask.view(-1, 1).to(x.dtype).detach()
                 else:
                     statistics_mask = torch.ones_like(x[:, :1])
+                current_step_size =statistics_mask.mean()
+                sbeta=(self.beta**current_step_size)
+                self.steps += current_step_size
+                debiaser = 1 / (1 - self.beta ** self.steps)
 
                 new_med = geometric_median(
                     x,
@@ -360,28 +364,27 @@ class RobustDistributionTracker(nn.Module):
                     eps=self.eps,
                     verbose=False# (self.steps < 1.5).all()
                 )
-                self.med.copy_(
-                    self.beta * self.med + (1 - self.beta) * new_med
-                )
+                old_std=self.upp-self.med
+                self.med=sbeta * self.med + (1 - sbeta) * new_med
+                
                 med_debiased = self.med * debiaser
 
-                new_aad = (
-                    ((x - med_debiased[None]) * statistics_mask).mean(0) / statistics_mask.mean(0)
-                )
-                self.aad.copy_(
-                    self.beta * self.aad + (1 - self.beta) * new_aad
-                )
-                aad_debiased = self.aad * debiaser
+                new_std = (
+                    ((x - med_debiased[None]).abs() * statistics_mask).mean(0) / statistics_mask.mean(0)
+                ) / np.sqrt(2 * np.pi)
+                self.upp=self.med+(sbeta * old_std + (1 - sbeta) * new_std)
+                
+                aad_debiased = (self.upp-self.med) * debiaser
+                adj_med= med_debiased
+                adj_std=aad_debiased
+            
+                self.adj_med_computed, self.adj_std_computed = adj_med, adj_std
 
-                # assuming that x is gaussian, we scale the AAD to get the STD
-                return med_debiased, aad_debiased / np.sqrt(2 * np.pi)
+        else:
+            adj_med, adj_std = self.adj_med_computed, self.adj_std_computed
 
-        debiaser = 1 / (self.eps + (1 - self.beta ** self.steps))
+        return adj_med, adj_std
 
-        med_debiased = self.med * debiaser
-        aad_debiased = self.aad * debiaser
-
-        return med_debiased, aad_debiased / np.sqrt(2 * np.pi)
 
 
 def geometric_median(
@@ -411,9 +414,10 @@ def geometric_median(
             print(f"Iteration {_} Mu: {mu.squeeze(dim)}")
 
         w = 1 / ((x - mu).abs() + eps)
-        w = w / (w.mean(dim, keepdim=True) + eps)
+        w = w  * mask
+        w = w / w.mean(dim, keepdim=True)
 
-        mu = (x * w).mean(dim, keepdim=True) * scale
+        mu = (x * w).mean(dim, keepdim=True)
 
     if verbose:
         print(f"Final Mu: {mu.squeeze(dim)}")
