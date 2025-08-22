@@ -48,9 +48,9 @@ def load_linear(module: CWICLinear, checkpoint: dict, name: str, layer: int):
 
     load(module.distribution_tracker.med, med)
     load(module.distribution_tracker.aad, (upp - med) + 1e-7)
-    load(module.distribution_tracker.steps, steps)
+    load(module.distribution_tracker.steps, steps[0])
 
-    load(module.thresholds, (c["thresholds"][layer]))# * c["scalar_scaler"][layer].item()).T)
+    load(module.thresholds, (c["thresholds"][layer]).T)# * c["scalar_scaler"][layer].item()).T)
 
 
 def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
@@ -76,7 +76,7 @@ def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
     # todo runnings
     load(module.distribution_tracker.med, med)
     load(module.distribution_tracker.aad, (upp - med) )
-    load(module.distribution_tracker.steps, steps )
+    load(module.distribution_tracker.steps, steps[0] )
 
     div = 1 - c["mad_tracker.beta"][layer].item() ** c["mad_tracker.steps"][layer].item()
     med = c["mad_tracker.med"][layer]# / (div + 1e-7)
@@ -87,7 +87,7 @@ def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
     load(module.mad_tracker.med, med)
 
     load(module.mad_tracker.aad, (upp - med) )
-    load(module.mad_tracker.steps, steps )
+    load(module.mad_tracker.steps, steps[0] )
 
     load(module.thresholds, c["thresholds"][layer])# * c["scalar_scaler"][layer].item())
 
