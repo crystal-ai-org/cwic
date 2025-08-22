@@ -26,9 +26,9 @@ from transformers.utils import (
 from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
 
-from models.configuration_cwic import CWICConfig
-from models.modules import CWICLinear, CWICMLP
-from models.outputs import (
+from cwic.models.configuration_cwic import CWICConfig
+from cwic.models.modules import CWICLinear, CWICMLP
+from cwic.models.outputs import (
     BaseModelOutputWithPastAndActiveParameters,
     CausalLMOutputWithPastAndActiveParameters,
 )

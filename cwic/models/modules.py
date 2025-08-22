@@ -11,7 +11,7 @@ from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
 from transformers.modeling_layers import GradientCheckpointingLayer
 
-from utils.torch_utils import attach_gradient
+from cwic.utils.torch_utils import attach_gradient
 
 
 logger = logging.get_logger(__name__)

@@ -11,7 +11,7 @@ from cwic.models.configuration_cwic import CWICConfig
 from cwic.models.modelling_cwic import CWICForCausalLM, CWICDecoderLayer
 from cwic.models.modules import CWICLinear, CWICMLP
 
-CHECKPOINT = "./checkpoints/release_fr_6"
+CHECKPOINT = "./checkpoints/release_fr_3"
 CONFIG = "./configs/llama_3-2_1B_Instruct.json"
 SAVE_PATH = "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct"
 
@@ -41,14 +41,14 @@ def load_linear(module: CWICLinear, checkpoint: dict, name: str, layer: int):
     load(module.weight, c["W.kernel"][layer])
     if module.bias is not None:
         load(module.bias, c["bias"][layer])
-    steps=c["dist_tracker.steps"][layer].item()
+    steps=c["dist_tracker.steps"][layer]
     div = 1 - c["dist_tracker.beta"][layer].item() ** c["dist_tracker.steps"][layer].item()
     med = c["dist_tracker.med"][layer] #/ (div + 1e-7)
     upp = c["dist_tracker.upp"][layer] #/ (div + 1e-7)
 
-    load(module.dist_tracker.med, med)
-    load(module.dist_tracker.aad, (upp - med) + 1e-7)
-    load(module.dist_tracker.steps, steps)
+    load(module.distribution_tracker.med, med)
+    load(module.distribution_tracker.aad, (upp - med) + 1e-7)
+    load(module.distribution_tracker.steps, steps)
 
     load(module.thresholds, (c["thresholds"][layer]))# * c["scalar_scaler"][layer].item()).T)
 
@@ -69,14 +69,14 @@ def load_mlp(module: CWICMLP, checkpoint: dict, name: str, layer: int):
     load(module.down.weight, c["down.kernel"][layer].T)
     if module.down.bias is not None:
         load(module.down.bias, c["down.bias"][layer])
-    steps=c["dist_tracker.steps"][layer].item()
+    steps=c["dist_tracker.steps"][layer]
     div = 1 - c["dist_tracker.beta"][layer].item() ** c["dist_tracker.steps"][layer].item()
     med = c["dist_tracker.med"][layer]# / (div + 1e-7)
     upp = c["dist_tracker.upp"][layer]# / (div + 1e-7)
     # todo runnings
-    load(module.dist_tracker.med, med)
-    load(module.dist_tracker.aad, (upp - med) )
-    load(module.dist_tracker.steps, steps )
+    load(module.distribution_tracker.med, med)
+    load(module.distribution_tracker.aad, (upp - med) )
+    load(module.distribution_tracker.steps, steps )
 
     div = 1 - c["mad_tracker.beta"][layer].item() ** c["mad_tracker.steps"][layer].item()
     med = c["mad_tracker.med"][layer]# / (div + 1e-7)
