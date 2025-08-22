@@ -27,6 +27,7 @@ logger = logging.get_logger(__name__)
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Running on", DEVICE)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="default")

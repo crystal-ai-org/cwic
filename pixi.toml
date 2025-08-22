@@ -6,9 +6,30 @@ authors = [
     "Adam Klein <adam@crystalai.org>",
     "Niveditha Iyer <niveditha@crystalai.org>"]
 description = ""
-channels = ["conda-forge", "pytorch", "nvidia"]
+channels = ["https://prefix.dev/conda-forge", "pytorch", "nvidia"]
+
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 preview = ["pixi-build"]
+
+[feature.gpu]
+platforms = ["linux-64", "linux-aarch64"]
+[feature.gpu.system-requirements]
+cuda = "12.0"
+
+[feature.gpu.dependencies]
+cuda-version = "12.8.*"
+pytorch-gpu = "*"
+jax = "*"
+datasets = "==4.0.0"
+
+[feature.cpu.dependencies]
+pytorch-cpu = "*"
+jax = "*"
+datasets = "==4.0.0"
+
+[environments]
+cpu = ["cpu"]
+default = ["gpu"]
 
 [pypi-dependencies]
 flax = { git = "https://github.com/google/flax.git" }
@@ -16,7 +37,6 @@ optax = "*"
 orbax-checkpoint = "*"
 chex = "*"
 wandb = "*"
-datasets = "*"
 transformers = "*"
 gcsfs = "*"
 jinja2 = "*"
@@ -34,9 +54,6 @@ flake8 = "*"
 autoflake = "*"
 docformatter = "*"
 pyright = "*"
-jax = { version = "*", extras = ["cuda12"] }
-torch = "*"
-torchvision = "*"
 einops = "*"
 accelerate = "*"
 hydra-core = "*"
@@ -44,7 +61,3 @@ cwic = { path = ".", editable = true }
 
 [dependencies]
 python = "==3.12"
-
-[target.osx-arm64.pypi-dependencies]
-# Pin JAX to CPU-only on Apple Silicon Macs
-jax = "*"
