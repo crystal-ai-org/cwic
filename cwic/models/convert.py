@@ -111,6 +111,7 @@ def llama_to_cwic(
     base_config.update(kwargs)
 
     config = CWICConfig(**base_config)
+    print(config)
     model = CWICForCausalLM(config).to(llama.device, llama.lm_head.weight.dtype)
 
     # LM components

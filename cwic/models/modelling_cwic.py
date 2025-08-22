@@ -362,7 +362,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         dense_params = dense_params + layer_dense_params
         active_params = active_params + layer_active_params
 
-        return hidden_states, (dense_params, active_params)
+        return hidden_states, dense_params, active_params
 
 
 @auto_docstring
@@ -474,7 +474,7 @@ class CWICModel(CWICPreTrainedModel):
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
-            hidden_states, (dense_params, active_params)  = decoder_layer(
+            hidden_states, dense_paramsl, active_paramsl  = decoder_layer(
                 hidden_states,
                 dense_params,
                 active_params,
@@ -486,6 +486,8 @@ class CWICModel(CWICPreTrainedModel):
                 statistics_mask=statistics_mask,
                 **kwargs,
             )
+            dense_params=dense_paramsl 
+            active_params=active_paramsl
 
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(

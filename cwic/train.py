@@ -54,7 +54,7 @@ def main(config: omegaconf.DictConfig):
     logger.info(f"Loaded teacher model {config.teacher_model}!")
 
     # convert the teacher model to CWIC format
-    student_model = llama_to_cwic(teacher_model)
+    student_model = llama_to_cwic(teacher_model,**config.model)
     # we keep the teacher model in its original format (important for some models)
     # but CWIC works best in float32
     student_model = student_model.to(torch.float32)
@@ -101,20 +101,21 @@ def main(config: omegaconf.DictConfig):
             a_min=0.0, a_max=1.0
         )
 
-        kd_loss = kd_loss_fn(
-            student_output.logits,
-            teacher_output.logits.to(student_output.logits.dtype),
-            mask=mask
-        )
         flop_loss, flop_reduction = flop_loss_fn(
             student_output.active_parameters,
             student_output.dense_parameters,
             target_ratio=target_ratio,
             mask=mask
         )
+        flop_loss.backward(retain_graph=True)
+        kd_loss = kd_loss_fn(
+            student_output.logits,
+            teacher_output.logits.to(student_output.logits.dtype),
+            mask=mask
+        )
+        kd_loss.backward()
 
         loss = kd_loss + flop_loss
-        loss.backward()
 
         optimizer.step()
         optimizer.zero_grad(True)

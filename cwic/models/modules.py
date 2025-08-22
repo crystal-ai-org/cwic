@@ -440,14 +440,15 @@ class RobustDistributionTracker(nn.Module):
                     eps=self.eps,
                     verbose=False# (self.steps < 1.5).all()
                 )
+                new_med=(x*statistics_mask).mean(dim=0)/statistics_mask.mean()
                 old_std=self.upp-self.med
                 self.med=sbeta * self.med + (1 - sbeta) * new_med
                 
                 med_debiased = self.med * debiaser
-
-                new_std = (
-                    ((x - med_debiased[None]).abs() * statistics_mask).mean(0) / statistics_mask.mean(0)
-                ) / np.sqrt(np.pi / 2)
+                new_std=((((x-new_med)**2)*statistics_mask).mean(dim=0)/statistics_mask.mean())**0.5
+                # new_std = (
+                #     ((x - med_debiased[None]).abs() * statistics_mask).mean(0) / statistics_mask.mean(0)
+                # ) / np.sqrt(np.pi / 2)
                 self.upp=self.med+(sbeta * old_std + (1 - sbeta) * new_std)
                 
                 aad_debiased = (self.upp-self.med) * debiaser
@@ -481,7 +482,7 @@ def geometric_median(
     scale = 1 / (mask.mean(dim, keepdim=True) + eps)
 
     mu = x.mean(dim, keepdim=True) * scale
-    
+
     if verbose:
         print(f"Target Median: {torch.median(x, dim=dim).values}")
         print(f"Initial Mu: {mu.squeeze(dim)}")
