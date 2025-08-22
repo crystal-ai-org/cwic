@@ -1,0 +1,48 @@
+
+run_name: cwic_train
+
+teacher_model: meta-llama/Llama-3.2-1B-Instruct
+
+batch_size: 8
+
+checkpoint_interval: 1000
+
+start_compute_reduction: 1.1
+end_compute_reduction: 6.0
+compute_reduction_steps: 10000
+
+model:
+
+  num_stripes: 4
+  num_head_stripes: 8
+
+  threshold_lr_scale: 10.0
+
+  bandwidth: 0.1
+
+  stats_beta: 0.99
+  median_iters: 3
+
+
+dataset:
+
+  path: crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled
+
+  split: train
+  streaming: true
+
+
+optimizer:
+
+  lr: 1e-5
+  weight_decay: 0.01
+
+  betas: [0.9, 0.95]
+
+
+lr_scheduler:
+
+  name: linear
+
+  num_warmup_steps: 500
+  num_training_steps: 10000

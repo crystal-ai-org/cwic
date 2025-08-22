@@ -209,14 +209,34 @@ class CWICAttention(nn.Module):
         self.qkv_proj = CWICLinear(
             config.hidden_size,
             sum(self.qkv_splits),
+<<<<<<< HEAD
             config.stripe_size,
             bias=config.attention_bias,
+=======
+            config.num_stripes,
+            bias=config.attention_bias,
+            threshold_lr_scale=config.threshold_lr_scale,
+            bandwidth=config.bandwidth,
+            stats_beta=config.stats_beta,
+            median_iters=config.median_iters,
+            eps=config.rms_norm_eps,
+>>>>>>> fe02f01 (working training (not fully tested))
         )
         self.o_proj = CWICLinear(
             config.num_attention_heads * self.head_dim,
             config.hidden_size,
+<<<<<<< HEAD
             config.stripe_size,
             bias=config.attention_bias,
+=======
+            config.num_stripes,
+            bias=config.attention_bias,
+            threshold_lr_scale=config.threshold_lr_scale,
+            bandwidth=config.bandwidth,
+            stats_beta=config.stats_beta,
+            median_iters=config.median_iters,
+            eps=config.rms_norm_eps,
+>>>>>>> fe02f01 (working training (not fully tested))
         )
 
     @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
@@ -293,6 +313,11 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
             num_stripes=config.num_stripes,
             hidden_act=config.hidden_act,
             bias=config.mlp_bias,
+            threshold_lr_scale=config.threshold_lr_scale,
+            bandwidth=config.bandwidth,
+            stats_beta=config.stats_beta,
+            median_iters=config.median_iters,
+            eps=config.rms_norm_eps,
         )
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -468,6 +493,7 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.model = CWICModel(config)
         self.vocab_size = config.vocab_size
+<<<<<<< HEAD
 
         num_head_stripes = math.ceil(config.vocab_size / config.head_stripe_size)
         self.lm_head = CWICLinear(
@@ -475,6 +501,18 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             num_head_stripes * config.head_stripe_size,
             config.head_stripe_size,
             bias=False,
+=======
+        self.lm_head = CWICLinear(
+            config.hidden_size,
+            config.vocab_size,
+            config.num_head_stripes,
+            bias=False,
+            threshold_lr_scale=config.threshold_lr_scale,
+            bandwidth=config.bandwidth,
+            stats_beta=config.stats_beta,
+            median_iters=config.median_iters,
+            eps=config.rms_norm_eps,
+>>>>>>> fe02f01 (working training (not fully tested))
         )
 
         # Initialize weights and apply final processing

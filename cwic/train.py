@@ -1,8 +1,11 @@
 import torch
 
+import numpy as np
 import datasets
-import argparse
+import os
 import wandb
+import hydra
+import omegaconf
 from tqdm import tqdm
 
 from transformers import (
@@ -23,33 +26,32 @@ from utils.loss_utils import (
 logger = logging.get_logger(__name__)
 
 
-DATASET = 'aklein4/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled'
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def main(args):
+@hydra.main(version_base=None, config_path="configs", config_name="default")
+def main(config: omegaconf.DictConfig):
     
     # Load the dataset
     dataset = datasets.load_dataset(
-        DATASET,
-        split='train',
-        streaming=True
+        **config.dataset
     )
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=config.batch_size,
         shuffle=False,
-        collate_fn=DeviceCollator(),
+        collate_fn=DeviceCollator(DEVICE),
     )
-    logger.info(f"Loaded dataset {DATASET} with batch size {args.batch_size}!")
+    logger.info(f"Loaded dataset {config.dataset.path} with batch size {config.batch_size}!")
 
     # Load the teacher model
-    teacher_tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    teacher_tokenizer = AutoTokenizer.from_pretrained(config.teacher_model)
     teacher_model = LlamaForCausalLM.from_pretrained(
-        args.model_name,
-        device_map=args.device,
+        config.teacher_model,
+        device_map=DEVICE,
     )
     teacher_model.eval()
-    logger.info(f"Loaded teacher model {args.model_name}!")
+    logger.info(f"Loaded teacher model {config.teacher_model}!")
 
     # convert the teacher model to CWIC format
     student_model = llama_to_cwic(teacher_model)
@@ -62,29 +64,24 @@ def main(args):
 
     optimizer = torch.optim.AdamW(
         student_model.parameters(),
-        lr=1e-5,
+        **config.optimizer
     )
     lr_scheduler = get_scheduler(
-        name="linear",
         optimizer=optimizer,
-        num_warmup_steps=500,
-        num_training_steps=1000
+        **config.lr_scheduler
     )
-    logger.info("Initialized optimizer and learning rate scheduler!")
+    logger.info(f"Initialized AdamW optimizer and {config.lr_scheduler.name} learning rate scheduler!")
 
-    # wandb.init(
-    #     project="CWIC-torch",
-    #     config={
-    #         "dataset": DATASET,
-    #         "batch_size": args.batch_size,
-    #         "model_name": args.model_name,
-    #         "learning_rate": 1e-5,
-    #         "num_warmup_steps": 500,
-    #         "num_training_steps": 1000,
-    #     }
-    # )
+    wandb.init(
+        project="CWIC-torch",
+        name=config.run_name,
+        config=omegaconf.OmegaConf.to_container(config, resolve=True)
+    )
+    logger.info("Starting Training!")
 
-    logger.info("Starting training...")
+    pbar = tqdm(desc="CWIC Distillation")
+    step = 0
+
     for batch in dataloader:
         mask = batch['pad_mask.npy'].float()
 
@@ -97,15 +94,21 @@ def main(args):
             statistics_mask=mask,
         )
 
+        compute_gain = config.end_compute_reduction - config.start_compute_reduction
+        target_ratio = config.start_compute_reduction + compute_gain * np.clip(
+            step / config.compute_reduction_steps,
+            a_min=0.0, a_max=1.0
+        )
+
         kd_loss = kd_loss_fn(
             student_output.logits,
             teacher_output.logits.to(student_output.logits.dtype),
             mask=mask
         )
-        flop_loss = flop_loss_fn(
+        flop_loss, flop_reduction = flop_loss_fn(
             student_output.active_params,
             student_output.dense_params,
-            target_ratio=2.0,
+            target_ratio=target_ratio,
             mask=mask
         )
 
@@ -116,18 +119,37 @@ def main(args):
         optimizer.zero_grad(True)
         lr_scheduler.step()
 
-        print(f"KD Loss: {kd_loss.item()}, FLOP Loss: {flop_loss.item()}")
+        pbar.update(1)
+        pbar.set_postfix(
+            {
+                "kd_loss": kd_loss.item(),
+                "FRR": flop_reduction.item(),
+                "FRR_targ": target_ratio,
+            }
+        )
+
+        wandb.log(
+            {
+                "loss": loss.item(),
+                "kd_loss": kd_loss.item(),
+                "flop_loss": flop_loss.item(),
+                "flop_reduction": flop_reduction.item(),
+                "flop_reduction_target": target_ratio,
+            },
+        )
+
+        step += 1
+
+        if step % config.checkpoint_interval == 0:
+            logger.info(f"Saving checkpoint at step {step}...")
+            
+            ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
+
+            student_model.save_pretrained(ckpt_path)
+            teacher_tokenizer.save_pretrained(ckpt_path)
+
+            logger.info(f"Checkpoint saved to {ckpt_path}!")
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="CWIC the training script.")
-
-    parser.add_argument('--dataset', type=str, default=DATASET, help='Dataset to use for training.')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training.')
-    parser.add_argument('--device', type=str, default="cuda", help='Device to use for training.')
-    parser.add_argument('--model_name', type=str, default='meta-llama/Llama-3.2-1B-Instruct', help='Model name to use for training.')
-
-    args = parser.parse_args()
-
-    main(args)
+    main()

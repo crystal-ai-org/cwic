@@ -4,9 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import numpy as np
+
 from transformers.utils import logging
 from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
+
+from utils.torch_utils import attach_gradient
 
 
 logger = logging.get_logger(__name__)
@@ -21,11 +25,18 @@ class CWICLinear(nn.Module):
         num_stripes: int,
         bias: Optional[bool] = True,
         threshold_lr_scale: float = 1.0,
+        bandwidth: float = 0.1,
+        stats_beta: float = 0.99,
+        median_iters: int = 3,
+        eps: float = 1e-7,
     ):
         super().__init__()
 
         self.in_features = in_features
         self.num_stripes = num_stripes
+        
+        self.bandwidth = bandwidth
+        self.eps = eps
 
         if out_features % num_stripes == 0:
             self.og_out_features = out_features
@@ -60,7 +71,12 @@ class CWICLinear(nn.Module):
         # when the argument threshold_lr_scale is 1.0, the thresholds move at the same 'speed' as the weights
         self.threshold_lr_scale = threshold_lr_scale * (in_features ** 0.5)
 
-        self.distribution_tracker = RobustDistributionTracker(self.in_features)
+        self.distribution_tracker = RobustDistributionTracker(
+            self.in_features,
+            beta=stats_beta,
+            num_iters=median_iters,
+            eps=eps
+        )
 
 
     def _get_weight(self) -> torch.Tensor:
@@ -96,15 +112,25 @@ class CWICLinear(nn.Module):
             * self.threshold_lr_scale
             * std[None, None] 
         ) # [1, N, I]
+        bandwidth = (
+            self.bandwidth
+            * std[None, None]
+        ) + self.eps # [1, 1, I]
 
-        mask = (
-            (x - mu[None]).abs() > thresholds
-        ).to(x.dtype) # [B, N, I]
+        # [B, 1, I]
+        x_demeaned = x - mu[None, None]  
+        x_gate = x_demeaned.abs()
+        
+        # [B, N, I], [B, N, I]
+        x_masked, mask = step_with_grads(
+            x_demeaned,
+            x_gate,
+            thresholds,
+            bandwidth
+        )
 
-        x = (
-            (x - mu[None]) * mask
-            + mu[None, None]
-        ).unsqueeze(-1) # [B, N, I, 1]
+        # [B, N, I, 1]
+        x = (x_masked + mu[None, None]).unsqueeze(-1)
 
         # [1, N, S, I]
         w = self._get_weight()
@@ -144,13 +170,20 @@ class CWICMLP(nn.Module):
         num_stripes: int,
         hidden_act: str = "silu",
         bias: bool = True,
-        threshold_lr_scale: float = 1.0
+        threshold_lr_scale: float = 1.0,
+        bandwidth: float = 0.1,
+        stats_beta: float = 0.99,
+        median_iters: int = 3,
+        eps: float = 1e-7,
     ):
         super().__init__()
 
         self.in_features = in_features
         self.inter_features = inter_features
         self.out_features = out_features
+
+        self.bandwidth = bandwidth
+        self.eps = eps
 
         self.gate = CWICLinear(
             in_features,
@@ -178,8 +211,18 @@ class CWICMLP(nn.Module):
         
         self.act_fn = ACT2FN[hidden_act]
 
-        self.distribution_tracker = RobustDistributionTracker(inter_features)
-        self.mad_tracker = RobustDistributionTracker(inter_features)
+        self.distribution_tracker = RobustDistributionTracker(
+            inter_features,
+            beta=stats_beta,
+            num_iters=median_iters,
+            eps=eps
+        )
+        self.mad_tracker = RobustDistributionTracker(
+            self.inter_features,
+            beta=stats_beta,
+            num_iters=median_iters,
+            eps=eps
+        )
 
 
     def forward(
@@ -191,11 +234,11 @@ class CWICMLP(nn.Module):
         z, gate_dense_params, gate_active_params = self.gate(x, statistics_mask=statistics_mask)
         z = self.act_fn(z)
 
-        mu, std = self.distribution_tracker(
+        std = self.distribution_tracker(
             z,
             statistics_mask=statistics_mask
-        )
-        mu_abs = self.mad_tracker(
+        )[1]
+        mad = self.mad_tracker(
             z.abs(),
             statistics_mask=statistics_mask
         )[0]
@@ -203,14 +246,22 @@ class CWICMLP(nn.Module):
         thresholds = (
             self.thresholds
             * self.threshold_lr_scale
-            * mu_abs
+            * mad
         ).view(*[1 for _ in range(x.ndim - 1)], -1)
+        bandwidth = (
+            self.bandwidth
+            * std
+        ).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
 
-        mask = (z.abs() > thresholds).to(z.dtype)
-        z = z * mask
+        z_masked, mask = step_with_grads(
+            z,
+            z.abs(),
+            thresholds,
+            bandwidth
+        )
 
         y = self.down(
-            self.up(x) * z
+            self.up(x) * z_masked
         )
 
         active_params = gate_active_params + (self.in_features + self.out_features) * mask.sum(dim=-1)
@@ -219,16 +270,42 @@ class CWICMLP(nn.Module):
         return y, dense_params, active_params
 
 
+def step_with_grads(
+    x: torch.Tensor,
+    x_gate: torch.Tensor,
+    thresholds: torch.Tensor,
+    bandwidth: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    mask = (x_gate > thresholds).to(x.dtype)
+    
+    kernel = F.hardsigmoid(3 * (x_gate - thresholds) / bandwidth)
+    nog_kernel = F.hardsigmoid(3 * (x_gate.detach() - thresholds) / bandwidth)
+
+    mask = attach_gradient(kernel, mask)
+    nog_mask = attach_gradient(nog_kernel, mask)
+
+    out = attach_gradient(
+        x, x.detach() * nog_mask,
+    )
+
+    return out, mask
+
+
 class RobustDistributionTracker(nn.Module):
 
     def __init__(
         self,
         hidden_size,
         beta: float = 0.99,
+        num_iters: int = 3,
+        eps: float = 1e-7,
     ):
         super().__init__()
         self.hidden_size = hidden_size
         self.beta = beta
+        self.num_iters = num_iters
+        self.eps = eps
 
         self.register_buffer(
             "steps",
@@ -269,9 +346,11 @@ class RobustDistributionTracker(nn.Module):
 
                 new_med = geometric_median(
                     x,
-                    num_iters=3,
+                    num_iters=self.num_iters,
                     dim=0,
                     mask=statistics_mask,
+                    eps=self.eps,
+                    verbose=False# (self.steps < 1.5).all()
                 )
                 self.med.copy_(
                     self.beta * self.med + (1 - self.beta) * new_med
@@ -279,21 +358,22 @@ class RobustDistributionTracker(nn.Module):
                 med_debiased = self.med * debiaser
 
                 new_aad = (
-                    ((x - med_debiased) * statistics_mask).mean() / statistics_mask.mean()
+                    ((x - med_debiased[None]) * statistics_mask).mean(0) / statistics_mask.mean(0)
                 )
                 self.aad.copy_(
                     self.beta * self.aad + (1 - self.beta) * new_aad
                 )
                 aad_debiased = self.aad * debiaser
 
-                return med_debiased, aad_debiased
+                # assuming that x is gaussian, we scale the AAD to get the STD
+                return med_debiased, aad_debiased / np.sqrt(2 * np.pi)
 
-        debiaser = 1 / (1e-5 + (1 - self.beta ** self.steps))
+        debiaser = 1 / (self.eps + (1 - self.beta ** self.steps))
 
         med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser
 
-        return med_debiased, aad_debiased
+        return med_debiased, aad_debiased / np.sqrt(2 * np.pi)
 
 
 def geometric_median(
@@ -302,6 +382,7 @@ def geometric_median(
     dim,
     mask=None,
     eps=1e-7,
+    verbose=False
 ):
     assert num_iters >= 0
 
@@ -313,11 +394,20 @@ def geometric_median(
 
     mu = x.mean(dim, keepdim=True) * scale
 
+    if verbose:
+        print(f"Target Median: {torch.median(x, dim=dim).values}")
+        print(f"Initial Mu: {mu.squeeze(dim)}")
+
     for _ in range(num_iters):
+        if verbose:
+            print(f"Iteration {_} Mu: {mu.squeeze(dim)}")
 
         w = 1 / ((x - mu).abs() + eps)
         w = w / (w.mean(dim, keepdim=True) + eps)
 
         mu = (x * w).mean(dim, keepdim=True) * scale
+
+    if verbose:
+        print(f"Final Mu: {mu.squeeze(dim)}")
 
     return mu.squeeze(dim)

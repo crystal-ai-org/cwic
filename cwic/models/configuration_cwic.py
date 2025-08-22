@@ -113,6 +113,14 @@ class CWICConfig(PretrainedConfig):
             The stripe size for the CWIC linear layers.
         head_stripe_size (`int`, *optional*, defaults to 1):
             The stripe size for the CWIC LM head.
+        threshold_lr_scale (`float`, *optional*, defaults to 1.0):
+            The scale factor for the threshold learning rate.
+        bandwidth (`float`, *optional*, defaults to 0.1):
+            The bandwidth for the CWIC gradient estimators.
+        stats_beta (`float`, *optional*, defaults to 0.99):
+            The beta value for the CWIC running statistics.
+        median_iters (`int`, *optional*, defaults to 3):
+            The number of iterations to use for the geometric median in the CWIC running statistics.
 
     ```python
     >>> from transformers import CWICModel, CWICConfig
@@ -154,8 +162,12 @@ class CWICConfig(PretrainedConfig):
         attention_dropout=0.0,
         mlp_bias=False,
         head_dim=None,
-        num_stripes=1,
-        num_head_stripes=1,
+        stripe_size=1,
+        head_stripe_size=1,
+        threshold_lr_scale=1.0,
+        bandwidth=0.1,
+        stats_beta=0.99,
+        median_iters=3,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -189,8 +201,13 @@ class CWICConfig(PretrainedConfig):
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
         rope_config_validation(self)
 
-        self.num_stripes = num_stripes
-        self.num_head_stripes = num_head_stripes
+        self.stripe_size = stripe_size
+        self.head_stripe_size = head_stripe_size
+
+        self.threshold_lr_scale = threshold_lr_scale
+        self.bandwidth = bandwidth
+        self.stats_beta = stats_beta
+        self.median_iters = median_iters
 
         assert not tie_word_embeddings, "Tying word embeddings is not supported in CWIC models."
 

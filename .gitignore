@@ -176,6 +176,8 @@ model_stuff.txt
 checkpoints_npy/smol360_instruct/params.json
 model_code/gpu_ops_build
 
+outputs
+
 benchmark_data/*
 data/mmlu
 

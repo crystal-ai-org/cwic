@@ -76,4 +76,4 @@ def flop_loss_fn(
 
     ratio = dense_per_token / active_per_token
 
-    return torch.clip(ratio - target_ratio, max=0) ** 2
+    return torch.clip(ratio - target_ratio, max=0) ** 2, ratio

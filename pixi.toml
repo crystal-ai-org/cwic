@@ -39,6 +39,7 @@ torch = "*"
 torchvision = "*"
 einops = "*"
 accelerate = "*"
+hydra-core = "*"
 cwic = { path = ".", editable = true }
 
 [dependencies]
