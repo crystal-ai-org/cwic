@@ -24,24 +24,45 @@ source ~/.bashrc
 pixi shell
 ```
 
-## Inference
+## Usage
+
+### Inference
 ```sh
 python cwic/chat_with_it.py
 ```
-This will let you chat with one of our models and get output highlighted based off active parameters used!
+This will let you chat with one of our [**Pretrained Models**](#pretrained-models) models and get output highlighted based off active parameters used!
 Note: this might take a few minutes the first time you run it as it will download HuggingFace checkpoints.
 
 The model output is highlighted to indicate the amount of compute spent on each. Darker blue indicates more compute, lighter yellow indicates less compute. Here is an example from a run where we requested Python code for the Fibonacci Series:
 ![chat_terminal.png](assets/chat_terminal.png)
 (If on MacOS, it's recommended to run this script in a code editor terminal. Running it in Terminal doesn't seem to display the highlights.)
 
-## Training
+### Training
 ```sh
 wandb login
 # gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
 # CWIC train a huggingface model directly
 python cwic/train.py
 ```
+# Pretrained Models
+
+Pretrained models are uploaded to [Hugging Face](https://huggingface.co/crystal-ai):  finetuned on upto 1.3B tokens on [crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled](https://huggingface.co/datasets/crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled)
+
+The models will be autodownloaded by the generation script below.
+
+```sh
+python cwic/chat_with_it.py
+```
+
+| Model | Parameters| Avg. Active Parameters| Avg. Reduction | Tokens |
+| ------------|---|-----------|--- | --|
+| [crystal-ai/CWICLlama-3.2-1B-A620M-Instruct](https://huggingface.co/crystal-ai/CWICLlama-3.2-1B-A620M-Instruct) | 1.2B | 620M 	| 2x | 0.26B|
+| [crystal-ai/CWICLlama-3.2-1B-A413M-Instruct](https://huggingface.co/crystal-ai/CWICLlama-3.2-1B-A413M-Instruct) | 1.2B | 413M |3x| 0.52B|
+| [crystal-ai/CWICLlama-3.2-1B-A310M-Instruct](https://huggingface.co/crystal-ai/CWICLlama-3.2-1B-A310M-Instruct) | 1.2B | 310M |4x| 0.78B|
+| [crystal-ai/CWICLlama-3.2-1B-A248M-Instruct](https://huggingface.co/crystal-ai/CWICLlama-3.2-1B-A248M-Instruct) | 1.2B | 248M |5x| 1.04B|
+| [crystal-ai/CWICLlama-3.2-1B-A206M-Instruct](https://huggingface.co/crystal-ai/CWICLlama-3.2-1B-A206M-Instruct) | 1.2B | 206M |6x| 1.30B|
+
+Note: these are base models trained for only  1.3B tokens, without any form of downstream modification (instruction tuning, etc.). Performance is expected to be comparable or better than other sparsity methods trained on similar data, but might not beat dedicated small models such as SmolLM trained on *trillions* of tokens in all cases.
 
 ## Background
 Large language models have become ubiquitous tools for natural language tasks. However, LLM inference requirements have grown beyond consumer devices and drive massive industry hardware expenses. For many applications, especially agentic ones, inference speed and cost are critical bottlenecks for real world deployment.
