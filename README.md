@@ -39,8 +39,8 @@ The model output is highlighted to indicate the amount of compute spent on each.
 ```sh
 wandb login
 # gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
-# CWIC training only works in JAX right now, we are working on being able to train a huggingface model directly
-python cwic/cwic_scripts/train_cwic.py
+# CWIC train a huggingface model directly
+python cwic/train.py
 ```
 
 ## Background
