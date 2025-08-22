@@ -20,7 +20,10 @@ OUTPUT_FOLDER = "./flop_diagrams"
 FR = 3  # Nx active parameter reduction over Llama-3.1-1B-Instruct
 # NORMALIZER for flop coloring in terminal as well
 CHECKPOINT = {
+    2: "crystal-ai/CWICLlama-3.2-1B-A620M-Instruct",
     3: "crystal-ai/CWICLlama-3.2-1B-A413M-Instruct",
+    4: "crystal-ai/CWICLlama-3.2-1B-A310M-Instruct",
+    5: "crystal-ai/CWICLlama-3.2-1B-A248M-Instruct",
     6: "crystal-ai/CWICLlama-3.2-1B-A206M-Instruct",
 }[FR]
 
