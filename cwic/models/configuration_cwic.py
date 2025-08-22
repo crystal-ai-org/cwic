@@ -166,8 +166,8 @@ class CWICConfig(PretrainedConfig):
         attention_dropout=0.0,
         mlp_bias=False,
         head_dim=None,
-        stripe_size=1,
-        head_stripe_size=1,
+        stripe_size=None,
+        head_stripe_size=None,
         threshold_lr_scale=1.0,
         threshold_init=0.1,
         threshold_minimum=1e-3,
@@ -207,8 +207,8 @@ class CWICConfig(PretrainedConfig):
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
         rope_config_validation(self)
 
-        self.stripe_size = stripe_size
-        self.head_stripe_size = head_stripe_size
+        self.stripe_size = stripe_size or 1000000000
+        self.head_stripe_size = head_stripe_size or 1000000000
 
         self.threshold_lr_scale = threshold_lr_scale
         self.threshold_init = threshold_init

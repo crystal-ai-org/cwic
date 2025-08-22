@@ -499,10 +499,9 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         self.model = CWICModel(config)
         self.vocab_size = config.vocab_size
 
-        num_head_stripes = math.ceil(config.vocab_size / config.head_stripe_size)
         self.lm_head = CWICLinear(
             config.hidden_size,
-            num_head_stripes * config.head_stripe_size,
+            config.vocab_size,
             config.head_stripe_size,
             bias=False,
             threshold_lr_scale=config.threshold_lr_scale,

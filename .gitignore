@@ -181,6 +181,10 @@ outputs
 benchmark_data/*
 data/mmlu
 
+
+
+flop_diagrams/
+
 # pixi environments
 .pixi/*
 !.pixi/config.toml

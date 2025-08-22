@@ -26,7 +26,7 @@ pixi shell
 
 ## Inference
 ```sh
-python cwic_scripts/chat_with_it.py
+python cwic/chat_with_it.py
 ```
 This will let you chat with one of our models and get output highlighted based off active parameters used!
 Note: this might take a few minutes the first time you run it as it will download HuggingFace checkpoints.
@@ -40,7 +40,7 @@ The model output is highlighted to indicate the amount of compute spent on each.
 wandb login
 # gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
 
-python cwic_scripts/train_cwic.py
+python cwic/train.py
 ```
 
 ## Background

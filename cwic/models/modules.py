@@ -39,6 +39,7 @@ class CWICLinear(nn.Module):
         super().__init__()
 
         self.in_features = in_features
+        stripe_size = min(stripe_size, out_features)
         self.stripe_size = stripe_size
         
         self.bandwidth = bandwidth
@@ -207,16 +208,16 @@ class CWICLinear(nn.Module):
             mask = (
                 x_gate > thresholds
             ).to(x.dtype)
-            if math.prod(og_shape)==1 and smm is not None:
+            if math.prod(og_shape)==1 and smm is not None and self.stripe_size%16==0:
                 y = smm(
-                    x,
+                    x_demeaned,
                     self.weight,
                     thresholds,
                     stripe_size=self.stripe_size
                 ).view(-1, self.out_features)
                 y = y + self._get_post_mu()
             else:
-                x = x * mask
+                x = x_demeaned * mask
 
                 y = torch.einsum(
                     "b n s i, b n i p -> b n s p",
@@ -326,7 +327,6 @@ class CWICMLP(nn.Module):
             z.abs(),
             statistics_mask=statistics_mask
         )[0]
-
         thresholds = (
             self.thresholds
             * self.threshold_lr_scale

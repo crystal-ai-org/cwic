@@ -107,8 +107,8 @@ def main(config: omegaconf.DictConfig):
             mask=mask
         )
         flop_loss, flop_reduction = flop_loss_fn(
-            student_output.active_params,
-            student_output.dense_params,
+            student_output.active_parameters,
+            student_output.dense_parameters,
             target_ratio=target_ratio,
             mask=mask
         )

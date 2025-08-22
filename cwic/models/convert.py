@@ -9,14 +9,15 @@ from transformers.models.llama.modeling_llama import (
     LlamaForCausalLM,
 )
 
-from cwic_huggingface_cwic import (
+from .modelling_cwic import (
     CWICAttention,
     CWICDecoderLayer,
     CWICForCausalLM,
 )
-from models.modcwic_huggingfacert LlamaRMSNorm as CWICRMSNorm
-from models.configurationcwic_huggingfaceCConfig
-from models.modules import CWICLinecwic_huggingfacef _convert_norm(
+from .modelling_cwic import LlamaRMSNorm as CWICRMSNorm
+from .configuration_cwic import CWICConfig
+from .modules import CWICLinear, CWICMLP
+def _convert_norm(
     cwic: CWICRMSNorm,
     llama: LlamaRMSNorm
 ):
