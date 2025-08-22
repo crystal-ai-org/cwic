@@ -1,7 +1,5 @@
 # Compute Where It Counts: High Quality Sparsely Activated LLMs
 
-![chat_terminal.png](assets/chat_terminal.png)
-
 **CWIC** (Compute Where It Counts), is a new method for creating efficient transformers that automatically decide when to use more or less compute. CWIC makes models **faster, more cost-efficient, and more interpretable**.
 
 **Summary:**
@@ -16,7 +14,7 @@
 
 Read more [on our blog](https://crystalai.org/blog/2025-08-18-compute-where-it-counts)!
 
-## Installation
+## Installation (on Linux or MacOS Arm64)
 ```sh
 curl -fsSL https://pixi.sh/install.sh | sh
 source ~/.bashrc
@@ -29,9 +27,12 @@ pixi shell
 python cwic_scripts/chat_with_it.py
 ```
 This will let you chat with one of our models and get output highlighted based off active parameters used!
+Note: this might take a few minutes the first time you run it as it will download HuggingFace checkpoints.
 
-darker blue is more compute, light highlight is less
+The model output is highlighted to indicate the amount of compute spent on each. Darker blue indicates more compute, lighter yellow indicates less compute. Here is an example from a run where we requested Python code for the Fibonacci Series:
 ![chat_terminal.png](assets/chat_terminal.png)
+(If on MacOS, it's recommended to run this script in a code editor terminal. Running it in Terminal doesn't seem to display the highlights.)
+
 ## Training
 ```sh
 wandb login
@@ -40,10 +41,7 @@ wandb login
 python cwic_scripts/train_cwic.py
 ```
 
-
 ## Background
-
-
 Large language models have become ubiquitous tools for natural language tasks. However, LLM inference requirements have grown beyond consumer devices and drive massive industry hardware expenses. For many applications, especially agentic ones, inference speed and cost are critical bottlenecks for real world deployment.
 
 Therefore, many methods have been proposed to improve LLM inference efficiency. These include [quantization](https://arxiv.org/abs/2402.16775), [pruning](https://arxiv.org/abs/2305.11627), and [sparse Mixture of Experts (MoE)](https://arxiv.org/abs/1701.06538). Activation sparsity, the category in which CWIC falls, is another such approach. It focuses on removing small and inconsequential activations from the inputs of matrix multiplications, allowing some computations to be skipped without affecting the model's output.
@@ -51,7 +49,6 @@ Therefore, many methods have been proposed to improve LLM inference efficiency. 
 One of the earliest activation sparsity methods for LLMs was [Relufication](https://arxiv.org/abs/2310.04564), which inserted ReLU activation functions into LLMs to induce sparsity. [ProSparse](https://arxiv.org/abs/2402.13516v4) further increased sparsity by adding an L1 penalty to the ReLU activations. [Deja Vu](https://arxiv.org/abs/2310.17157) and [ShadowLLM](https://arxiv.org/abs/2406.16635) predicted sparsity on the fly by training small auxiliary MLPs. [Q-Sparse](https://arxiv.org/abs/2407.10969) discarded all but the top-K largest activations, and demonstrated a *sparse scaling law* where larger models are more robust to sparsity.
 
 Most similar to our work are [CATS](https://arxiv.org/abs/2404.08763), [TEAL](https://www.together.ai/blog/teal-training-free-activation-sparsity-in-large-language-models), and [R-SPARSE](https://arxiv.org/abs/2504.19449). These methods all remove activations with smaller magnitude than a *threshold*. However, none of these methods directly learn activation thresholds. Furthermore, these methods suffer from performance collapse at high sparsity levels. CWIC addresses both limitations.
-
 
 ## Motivating Insights
 
