@@ -1,6 +1,7 @@
 
 run_name: cwic_train
 wandb_entity: euler-ai
+wandb_project: cwic
 
 teacher_model: unsloth/Llama-3.2-1B-Instruct
 
