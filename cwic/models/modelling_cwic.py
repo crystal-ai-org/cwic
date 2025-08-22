@@ -473,7 +473,7 @@ class CWICModel(CWICPreTrainedModel):
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
             hidden_states_and_param_counts = decoder_layer(
-                hidden_states_and_param_counts
+                hidden_states_and_param_counts,
                 attention_mask=causal_mask,
                 position_ids=position_ids,
                 past_key_values=past_key_values,
