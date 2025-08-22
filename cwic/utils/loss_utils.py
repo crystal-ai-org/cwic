@@ -45,11 +45,13 @@ def _kd_loss_fn(
         input=student_logits,
         target=teacher_logits,
         log_target=True,
+        reduction='batchmean',
     )
     fkl = F.kl_div(
         input=teacher_logits,
         target=student_logits,
         log_target=True,
+        reduction='batchmean',
     )
 
     loss = (rkl + fkl) / 2
