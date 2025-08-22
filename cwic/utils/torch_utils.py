@@ -19,6 +19,22 @@ def scale_gradient(x, scale):
     return _ScaleGradient.apply(x, scale)
 
 
+class _DebugGradient(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x):
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        print(grad_output)
+        return grad_output
+
+
+def debug_gradient(x):
+    return _DebugGradient.apply(x)
+
+
 # class _AttachGradient(torch.autograd.Function):
 
 #     @staticmethod

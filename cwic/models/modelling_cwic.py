@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, Union
-import math
+
 import torch
 from torch import nn
+
 from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.generation import GenerationMixin
@@ -20,7 +21,7 @@ from transformers.utils import (
     TransformersKwargs,
     auto_docstring,
     can_return_tuple,
-    logging,
+    logging
 )
 from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
@@ -240,12 +241,14 @@ class CWICAttention(nn.Module):
         cache_position: Optional[torch.LongTensor] = None,
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> tuple[torch.Tensor, torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
 
-        qkv_states, (qkv_dense_parameters, qkv_active_parameters) = self.qkv_proj(hidden_states)
+        qkv_states, qkv_dense_parameters, qkv_active_parameters = self.qkv_proj(
+            hidden_states, statistics_mask=statistics_mask
+        )
         query_states, key_states, value_states = qkv_states.split(self.qkv_splits, dim=-1)
 
         query_states = query_states.view(hidden_shape).transpose(1, 2)
@@ -278,14 +281,14 @@ class CWICAttention(nn.Module):
         )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-        attn_output, (o_dense_parameters, o_active_parameters) = self.o_proj(
+        attn_output, o_dense_parameters, o_active_parameters = self.o_proj(
             attn_output, statistics_mask=statistics_mask
         )
 
         dense_parameters = qkv_dense_parameters + o_dense_parameters
         active_parameters = qkv_active_parameters + o_active_parameters
 
-        return attn_output, attn_weights, (dense_parameters, active_parameters)
+        return attn_output, attn_weights, dense_parameters, active_parameters
 
 
 class CWICDecoderLayer(GradientCheckpointingLayer):
@@ -320,7 +323,7 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
     @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
     def forward(
         self,
-        hidden_states_and_param_counts: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[Cache] = None,
@@ -331,12 +334,16 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         ] = None,  # necessary, but kept here for BC
         statistics_mask: Optional[torch.BoolTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        hidden_states, dense_params, active_params = hidden_states_and_param_counts
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         # Self Attention
-        hidden_states, _, (attn_dense_params, attn_active_params) = self.self_attn(
+        hidden_states, _, attn_dense_parameters, attn_active_parameters = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -352,18 +359,15 @@ class CWICDecoderLayer(GradientCheckpointingLayer):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states, (mlp_dense_params, mlp_active_params) = self.mlp(
+        hidden_states, mlp_dense_parameters, mlp_active_parameters = self.mlp(
             hidden_states, statistics_mask=statistics_mask
         )
         hidden_states = residual + hidden_states
 
-        layer_dense_params = attn_dense_params + mlp_dense_params
-        layer_active_params = attn_active_params + mlp_active_params
+        dense_parameters = attn_dense_parameters + mlp_dense_parameters
+        active_parameters = attn_active_parameters + mlp_active_parameters
 
-        dense_params = dense_params + layer_dense_params
-        active_params = active_params + layer_active_params
-
-        return hidden_states, dense_params, active_params
+        return hidden_states, dense_parameters, active_parameters
 
 
 @auto_docstring
@@ -439,15 +443,6 @@ class CWICModel(CWICPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
 
-        dense_params = (
-            torch.ones(inputs_embeds.shape[:-1], device=inputs_embeds.device, dtype=torch.float32)
-            * 2
-        )
-        active_params = (
-            torch.ones(inputs_embeds.shape[:-1], device=inputs_embeds.device, dtype=torch.float32)
-            * 2
-        )
-
         if use_cache and past_key_values is None:
             past_key_values = DynamicCache()
 
@@ -472,13 +467,15 @@ class CWICModel(CWICPreTrainedModel):
             past_key_values=past_key_values,
             position_ids=position_ids,
         )
+
         hidden_states = inputs_embeds
-        hidden_states_and_param_counts = hidden_states, dense_params, active_params
+        dense_parameters = 0
+        active_parameters = 0
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
-            hidden_states_and_param_counts = decoder_layer(
-                hidden_states_and_param_counts,
+            hidden_states, layer_dense_parameters, layer_active_parameters = decoder_layer(
+                hidden_states,
                 attention_mask=causal_mask,
                 position_ids=position_ids,
                 past_key_values=past_key_values,
@@ -487,13 +484,15 @@ class CWICModel(CWICPreTrainedModel):
                 statistics_mask=statistics_mask,
                 **kwargs,
             )
-        hidden_states, dense_params, active_params = hidden_states_and_param_counts
+            dense_parameters = dense_parameters + layer_dense_parameters
+            active_parameters = active_parameters + layer_active_parameters
+
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPastAndActiveParameters(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
-            dense_parameters=dense_params,
-            active_parameters=active_params,
+            dense_parameters=dense_parameters,
+            active_parameters=active_parameters,
         )
 
 
@@ -504,7 +503,6 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.model = CWICModel(config)
         self.vocab_size = config.vocab_size
-
         self.lm_head = CWICLinear(
             config.hidden_size,
             config.vocab_size,
@@ -517,6 +515,7 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
+            do_checkpointing=True,
         )
 
         # Initialize weights and apply final processing
@@ -579,12 +578,14 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         slice_indices = (
             slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
         )
-        logits, (lm_head_dense_parameters, lm_head_active_parameters) = self.lm_head(
-            hidden_states[:, slice_indices, :]
+        logits, head_dense_parameters, head_active_parameters = self.lm_head(
+            hidden_states[:, slice_indices, :],
+            statistics_mask=statistics_mask,
         )
 
-        dense_parameters = outputs.dense_parameters + lm_head_dense_parameters
-        active_parameters = outputs.active_parameters + lm_head_active_parameters
+        dense_parameters = outputs.dense_parameters + head_dense_parameters
+        active_parameters = outputs.active_parameters + head_active_parameters
+
         loss = None
         if labels is not None:
             loss = self.loss_function(

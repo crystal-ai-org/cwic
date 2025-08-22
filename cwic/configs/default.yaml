@@ -13,6 +13,8 @@ end_compute_reduction: 6.0
 compute_reduction_steps: 10000
 
 model:
+  stripe_size: 1024
+  head_stripe_size: 8192
   threshold_lr_scale: 10.0
   threshold_init: 0.1
   threshold_minimum: 0.001

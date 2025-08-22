@@ -64,10 +64,10 @@ def flop_loss_fn(
     target_ratio: float = 2.0,
     mask: Optional[torch.Tensor] = None,
 ):
-    # print(active_params,dense_params)
+
     if mask is not None:
-        active_per_token = (active_params * mask).mean()
-        dense_per_token = (dense_params * mask).mean()
+        active_per_token = (active_params * mask).sum() / mask.sum()
+        dense_per_token = (dense_params * mask).sum() / mask.sum()
     else:
         active_per_token = active_params.mean()
         dense_per_token = dense_params.mean()

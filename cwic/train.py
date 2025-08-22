@@ -27,11 +27,11 @@ logger = logging.get_logger(__name__)
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Running on", DEVICE)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="default")
 def main(config: omegaconf.DictConfig):
+    logger.info(f"Starting CWIC distillation training on device {str(DEVICE)}")
 
     # Load the dataset
     dataset = datasets.load_dataset(**config.dataset)
@@ -68,7 +68,7 @@ def main(config: omegaconf.DictConfig):
     )
 
     wandb.init(
-        project="cwic",
+        project=config.wandb_project,
         entity=config.wandb_entity,
         name=config.run_name,
         config=omegaconf.OmegaConf.to_container(config, resolve=True),
@@ -95,19 +95,18 @@ def main(config: omegaconf.DictConfig):
             step / config.compute_reduction_steps, a_min=0.0, a_max=1.0
         )
 
+        kd_loss = kd_loss_fn(
+            student_output.logits, teacher_output.logits.to(student_output.logits.dtype), mask=mask
+        )
         flop_loss, flop_reduction = flop_loss_fn(
             student_output.active_parameters,
             student_output.dense_parameters,
             target_ratio=target_ratio,
             mask=mask,
         )
-        flop_loss.backward(retain_graph=True)
-        kd_loss = kd_loss_fn(
-            student_output.logits, teacher_output.logits.to(student_output.logits.dtype), mask=mask
-        )
-        kd_loss.backward()
 
         loss = kd_loss + flop_loss
+        loss.backward()
 
         optimizer.step()
         optimizer.zero_grad(True)

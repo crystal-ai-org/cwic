@@ -9,14 +9,14 @@ from transformers.models.llama.modeling_llama import (
     LlamaForCausalLM,
 )
 
-from .modelling_cwic import (
+from models.modelling_cwic import (
     CWICAttention,
     CWICDecoderLayer,
     CWICForCausalLM,
 )
-from .modelling_cwic import LlamaRMSNorm as CWICRMSNorm
-from .configuration_cwic import CWICConfig
-from .modules import CWICLinear, CWICMLP
+from models.modelling_cwic import LlamaRMSNorm as CWICRMSNorm
+from models.configuration_cwic import CWICConfig
+from models.modules import CWICLinear, CWICMLP
 
 
 def _convert_norm(cwic: CWICRMSNorm, llama: LlamaRMSNorm):
@@ -75,7 +75,6 @@ def llama_to_cwic(
     base_config.update(kwargs)
 
     config = CWICConfig(**base_config)
-    print(config)
     model = CWICForCausalLM(config).to(llama.device, llama.lm_head.weight.dtype)
 
     # LM components

@@ -109,9 +109,9 @@ class CWICConfig(PretrainedConfig):
             Whether to use a bias in up_proj, down_proj and gate_proj layers in the MLP layers.
         head_dim (`int`, *optional*):
             The attention head dimension. If None, it will default to hidden_size // num_attention_heads
-        stripe_size (`int`, *optional*, defaults to 1):
+        stripe_size (`int`, *optional*, defaults to None):
             The stripe size for the CWIC linear layers.
-        head_stripe_size (`int`, *optional*, defaults to 1):
+        head_stripe_size (`int`, *optional*, defaults to None):
             The stripe size for the CWIC LM head.
         threshold_lr_scale (`float`, *optional*, defaults to 1.0):
             The scale factor for the threshold learning rate.
@@ -207,8 +207,8 @@ class CWICConfig(PretrainedConfig):
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
         rope_config_validation(self)
 
-        self.stripe_size = stripe_size or 1000000000
-        self.head_stripe_size = head_stripe_size or 1000000000
+        self.stripe_size = stripe_size
+        self.head_stripe_size = head_stripe_size
 
         self.threshold_lr_scale = threshold_lr_scale
         self.threshold_init = threshold_init
