@@ -1,3 +1,4 @@
+from functools import partial
 import math
 from typing import Optional
 
