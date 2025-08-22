@@ -1,10 +1,12 @@
 
 run_name: cwic_train
+
 wandb_entity: euler-ai
+wandb_project: cwic
 
 teacher_model: unsloth/Llama-3.2-1B-Instruct
 
-batch_size: 16
+batch_size: 8
 
 checkpoint_interval: 1000
 
@@ -13,8 +15,10 @@ end_compute_reduction: 6.0
 compute_reduction_steps: 10000
 
 model:
+
   stripe_size: 1024
   head_stripe_size: 8192
+
   threshold_lr_scale: 10.0
   threshold_init: 0.1
   threshold_minimum: 0.001

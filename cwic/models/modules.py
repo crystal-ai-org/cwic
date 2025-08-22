@@ -11,14 +11,17 @@ from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
 from transformers.modeling_layers import GradientCheckpointingLayer
 
-try:
-    from cwic_triton.triton_torch import smm
-except:
-    smm = None
 from utils.torch_utils import attach_gradient
 
 
 logger = logging.get_logger(__name__)
+
+
+try:
+    from cwic_triton.triton_torch import smm
+except:
+    logger.warning("Failed to import `smm` from `cwic_triton.triton_torch`.")
+    smm = None
 
 
 class CWICLinear(GradientCheckpointingLayer):
@@ -170,7 +173,7 @@ class CWICLinear(GradientCheckpointingLayer):
         batched = math.prod(og_shape) > 1
         x = x.view(-1, 1, self.in_features)
 
-        thresholds = self._get_thresholds(std) # [1, N, I]
+        thresholds = self._get_thresholds(std)  # [1, N, I]
 
         # [B, 1, I]
         x_demeaned = x - mu[None, None]
