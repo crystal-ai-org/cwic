@@ -404,7 +404,7 @@ class RobustDistributionTracker(nn.Module):
                 self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
                 med_debiased = self.med * debiaser
 
-                new_aad = ((x - med_debiased[None]) * statistics_mask).mean(
+                new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
                     0
                 ) / statistics_mask.mean(0)
                 self.aad.copy_(self.beta * self.aad + (1 - self.beta) * new_aad)

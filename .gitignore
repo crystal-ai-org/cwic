@@ -181,7 +181,8 @@ outputs
 benchmark_data/*
 data/mmlu
 
-
+crystal-ai/
+torch_checkpoints/
 
 flop_diagrams/
 
