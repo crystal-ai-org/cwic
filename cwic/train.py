@@ -136,14 +136,15 @@ def main(config: omegaconf.DictConfig):
         step += 1
 
         if step % config.checkpoint_interval == 0:
-            logger.info(f"Saving checkpoint at step {step}...")
+            with torch.no_grad():
+                logger.info(f"Saving checkpoint at step {step}...")
 
-            ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
+                ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
 
-            student_model.save_pretrained(ckpt_path)
-            teacher_tokenizer.save_pretrained(ckpt_path)
+                student_model.save_pretrained(ckpt_path)
+                teacher_tokenizer.save_pretrained(ckpt_path)
 
-            logger.info(f"Checkpoint saved to {ckpt_path}!")
+                logger.info(f"Checkpoint saved to {ckpt_path}!")
 
 
 if __name__ == "__main__":

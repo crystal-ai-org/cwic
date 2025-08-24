@@ -1,7 +1,7 @@
 
 run_name: cwic_train
 
-wandb_entity: euler-ai
+wandb_entity: null
 wandb_project: cwic
 
 teacher_model: unsloth/Llama-3.2-1B-Instruct
@@ -10,7 +10,7 @@ batch_size: 8
 
 checkpoint_interval: 1000
 
-start_compute_reduction: 1.1
+start_compute_reduction: 1.5
 end_compute_reduction: 6.0
 compute_reduction_steps: 10000
 
@@ -18,6 +18,8 @@ model:
 
   stripe_size: 1024
   head_stripe_size: 8192
+
+  head_limit: 10.0
 
   threshold_lr_scale: 10.0
   threshold_init: 0.1
@@ -39,8 +41,8 @@ dataset:
 
 optimizer:
 
-  lr: 0.00004898979485566357
-  weight_decay: 0.01
+  lr: 0.00001
+  weight_decay: 0.001
 
   betas: [0.9, 0.95]
 
@@ -49,5 +51,5 @@ lr_scheduler:
 
   name: linear
 
-  num_warmup_steps: 500
+  num_warmup_steps: 100
   num_training_steps: 10000

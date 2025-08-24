@@ -40,6 +40,7 @@ class CWICLinear(GradientCheckpointingLayer):
         median_iters: int = 3,
         eps: float = 1e-7,
         do_checkpointing: bool = False,
+        reduction_limit: Optional[float] = None,
     ):
         super().__init__()
 
@@ -48,6 +49,7 @@ class CWICLinear(GradientCheckpointingLayer):
         self.bandwidth = bandwidth
         self.eps = eps
         self.do_checkpointing = do_checkpointing
+        self.reduction_limit = reduction_limit
 
         # handle stripe sizes
         stripe_size = min(stripe_size, out_features) if stripe_size is not None else out_features
@@ -227,6 +229,19 @@ class CWICLinear(GradientCheckpointingLayer):
         active_params = self.stripe_size * mask.view(*og_shape, -1).sum(dim=-1)
         dense_params = self.stripe_size * torch.ones_like(mask).view(*og_shape, -1).sum(dim=-1)
 
+        if self.reduction_limit is not None:
+            mask = statistics_mask.to(active_params.dtype) if statistics_mask is not None else torch.ones_like(active_params)
+            
+            active_total = (active_params * mask).sum() / mask.sum()
+            dense_total = (dense_params * mask).sum() / mask.sum()
+            reduction = dense_total / (active_total + self.eps)
+
+            active_params = torch.where(
+                reduction > self.reduction_limit,
+                active_params.detach(),
+                active_params,
+            )
+
         return y, dense_params, active_params
 
 
@@ -389,7 +404,7 @@ class RobustDistributionTracker(nn.Module):
                 self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
                 med_debiased = self.med * debiaser
 
-                new_aad = ((x - med_debiased[None]) * statistics_mask).mean(
+                new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
                     0
                 ) / statistics_mask.mean(0)
                 self.aad.copy_(self.beta * self.aad + (1 - self.beta) * new_aad)

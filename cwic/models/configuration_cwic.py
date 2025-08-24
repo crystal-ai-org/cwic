@@ -113,6 +113,8 @@ class CWICConfig(PretrainedConfig):
             The stripe size for the CWIC linear layers.
         head_stripe_size (`int`, *optional*, defaults to None):
             The stripe size for the CWIC LM head.
+        head_limit: (`float`, *optional*, defaults to None):
+            The maximum flop reduction ratio that the LM head can reach.
         threshold_lr_scale (`float`, *optional*, defaults to 1.0):
             The scale factor for the threshold learning rate.
         threshold_init (`float`, *optional*, defaults to 0.1):
@@ -168,6 +170,7 @@ class CWICConfig(PretrainedConfig):
         head_dim=None,
         stripe_size=None,
         head_stripe_size=None,
+        head_limit=None,
         threshold_lr_scale=1.0,
         threshold_init=0.1,
         threshold_minimum=1e-3,
@@ -209,6 +212,8 @@ class CWICConfig(PretrainedConfig):
 
         self.stripe_size = stripe_size
         self.head_stripe_size = head_stripe_size
+
+        self.head_limit = head_limit
 
         self.threshold_lr_scale = threshold_lr_scale
         self.threshold_init = threshold_init

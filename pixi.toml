@@ -19,17 +19,13 @@ cuda = "12.0"
 [feature.gpu.dependencies]
 cuda-version = "12.8.*"
 pytorch-gpu = "*"
+jax = "*"
 datasets = "==4.0.0"
 
 [feature.cpu.dependencies]
 pytorch-cpu = "*"
-datasets = "==4.0.0"
-
-[feature.gpu.pypi-dependencies]
-jax = { version = "*", extras = ["cuda12"] }
-
-[feature.cpu.pypi-dependencies]
 jax = "*"
+datasets = "==4.0.0"
 
 [environments]
 cpu = ["cpu"]

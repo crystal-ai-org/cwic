@@ -37,6 +37,7 @@ def _convert_mlp(cwic: CWICMLP, mlp: LlamaMLP):
     )
 
     # TODO: handle the bias for these in case of bias in the llama model
+    assert mlp.up_proj.bias is None
     cwic.up.weight.data = mlp.up_proj.weight.data.T
     cwic.down.weight.data = mlp.down_proj.weight.data
 
