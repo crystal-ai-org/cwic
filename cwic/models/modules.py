@@ -336,10 +336,10 @@ def step_with_grads(
 
     mask = (x_gate > thresholds).to(x.dtype)
 
-    kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
+    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
     nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
 
-    mask = attach_gradient(kernel, mask)
+    g_mask = attach_gradient(g_kernel, mask)
     nog_mask = attach_gradient(nog_kernel, mask)
 
     out = attach_gradient(
@@ -347,7 +347,7 @@ def step_with_grads(
         x.detach() * nog_mask,
     )
 
-    return out, mask
+    return out, g_mask
 
 
 class RobustDistributionTracker(nn.Module):
