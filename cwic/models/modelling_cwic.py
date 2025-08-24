@@ -516,6 +516,7 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
             do_checkpointing=True,
+            reduction_limit=config.head_limit,
         )
 
         # Initialize weights and apply final processing
