@@ -77,9 +77,11 @@ def main(config: omegaconf.DictConfig):
 
     pbar = tqdm(desc="CWIC Distillation")
     step = 0
+    seen_tokens_combined = 0
 
     for batch in dataloader:
         mask = batch["pad_mask.npy"].float()
+        seen_tokens_combined+=mask.sum().item()
 
         with torch.no_grad():
             teacher_output = teacher_model(
@@ -130,6 +132,7 @@ def main(config: omegaconf.DictConfig):
                 "flop_loss/combined": flop_loss.item(),
                 "flop_ratios/combined": flop_reduction.item(),
                 "target_flop_reduction": target_ratio,
+                "seen_tokens/combined": seen_tokens_combined
             },
         )
 
