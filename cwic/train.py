@@ -78,8 +78,10 @@ def main(config: omegaconf.DictConfig):
     pbar = tqdm(desc="CWIC Distillation")
     step = 0
     seen_tokens_combined = 0
-
+    i = 0
     for batch in dataloader:
+        i+=1
+        
         mask = batch["pad_mask.npy"].float()
         seen_tokens_combined+=mask.sum().item()
 
@@ -109,45 +111,45 @@ def main(config: omegaconf.DictConfig):
 
         loss = kd_loss + flop_loss
         loss.backward()
+        if i%config.gradient_accumulations==0:
+            optimizer.step()
+            optimizer.zero_grad(True)
+            lr_scheduler.step()
 
-        optimizer.step()
-        optimizer.zero_grad(True)
-        lr_scheduler.step()
+            student_model.clip_thresholds()
 
-        student_model.clip_thresholds()
+            pbar.update(1)
+            pbar.set_postfix(
+                {
+                    "kd_loss": kd_loss.item(),
+                    "FRR": flop_reduction.item(),
+                    "FRR_targ": target_ratio,
+                }
+            )
 
-        pbar.update(1)
-        pbar.set_postfix(
-            {
-                "kd_loss": kd_loss.item(),
-                "FRR": flop_reduction.item(),
-                "FRR_targ": target_ratio,
-            }
-        )
+            wandb.log(
+                {
+                    "kd_loss/combined": loss.item(),
+                    "kd_loss/logits/twoway": kd_loss.item(),
+                    "flop_loss/combined": flop_loss.item(),
+                    "flop_ratios/combined": flop_reduction.item(),
+                    "target_flop_reduction": target_ratio,
+                    "seen_tokens/combined": seen_tokens_combined
+                },
+            )
 
-        wandb.log(
-            {
-                "kd_loss/combined": loss.item(),
-                "kd_loss/logits/twoway": kd_loss.item(),
-                "flop_loss/combined": flop_loss.item(),
-                "flop_ratios/combined": flop_reduction.item(),
-                "target_flop_reduction": target_ratio,
-                "seen_tokens/combined": seen_tokens_combined
-            },
-        )
+            step += 1
 
-        step += 1
+            if step % config.checkpoint_interval == 0:
+                with torch.no_grad():
+                    logger.info(f"Saving checkpoint at step {step}...")
 
-        if step % config.checkpoint_interval == 0:
-            with torch.no_grad():
-                logger.info(f"Saving checkpoint at step {step}...")
+                    ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
 
-                ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
+                    student_model.save_pretrained(ckpt_path)
+                    teacher_tokenizer.save_pretrained(ckpt_path)
 
-                student_model.save_pretrained(ckpt_path)
-                teacher_tokenizer.save_pretrained(ckpt_path)
-
-                logger.info(f"Checkpoint saved to {ckpt_path}!")
+                    logger.info(f"Checkpoint saved to {ckpt_path}!")
 
 
 if __name__ == "__main__":

@@ -7,13 +7,13 @@ wandb_project: cwic
 teacher_model: unsloth/Llama-3.2-1B-Instruct
 
 batch_size: 8
+gradient_accumulations: 16
 
 checkpoint_interval: 16000
 
 start_compute_reduction: 1.0
 end_compute_reduction: 6.0
-compute_reduction_steps: 160000
-
+compute_reduction_steps: 10000
 model:
 
   stripe_size: 1024
@@ -27,7 +27,7 @@ model:
 
   bandwidth: 0.1
 
-  stats_beta: 0.9993720513
+  stats_beta: 0.99
   median_iters: 3
 
 
@@ -41,15 +41,15 @@ dataset:
 
 optimizer:
 
-  lr: 0.000003061862178
-  weight_decay: 0.016
+  lr: 0.00004898979485566357
+  weight_decay: 0.01
 
-  betas: [0.9934366016, 0.9967993023]
+  betas: [0.9, 0.95]
 
 
 lr_scheduler:
 
   name: linear
 
-  num_warmup_steps: 100
+  num_warmup_steps: 400
   num_training_steps: 10000
