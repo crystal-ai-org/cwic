@@ -1,11 +1,51 @@
-# Compute Where It Counts: High Quality Sparsely Activated LLMs
+<div align="center">
+    <h1>
+    Compute Where It Counts: High Quality Sparsely Activated LLMs
+    </h1>
+</div>
 
-![A diagram demontrating the increased expressiveness of granular sparsity.](./assets/sparsity_patterns.svg)
+<div align="center">
+    <h4>
+        <a href="https://crystalai.org/blog/2025-08-18-compute-where-it-counts" target='_blank'>
+        <img src="https://img.shields.io/badge/📰-Project%20Page-blue">
+        </a>
+        <a href="https://crystalai.org/papers/compute-where-it-counts.pdf" target='_blank'>
+        <img src="https://img.shields.io/badge/📄-Paper-b31b1b">
+        </a>
+        <img src="https://visitor-badge.laobi.icu/badge?page_id=crystal-ai-org.cwic">
+    </h4>
+    <div >
+        <a>Cyris Kissane</a><sup>1*</sup>&emsp;
+        <a>Adam Klein</a><sup>1*</sup>&emsp;
+        <a>Niveditha Iyer</a><sup>1*</sup>&emsp;
+    </div>
+    <div>
+        Crystal Computing Corp.<sup>1</sup>
+        <br>
+        <sup>*</sup>equal contribution
+    </div>
+</div>
 
-**CWIC** (Compute Where It Counts), is a new method for creating efficient transformers that automatically decide when to use more or less compute. CWIC makes models **faster, more cost-efficient, and more interpretable**.
+<br>
 
-**Summary:**
+<div align="center">
+    <p>
+        <span style="font-variant: small-caps;"><strong>CWIC</strong></span> is a new method for creating efficient transformers that automatically decide when to use more or less compute.
+        <br>
+        <i>⭐ CWIC makes models <b>faster</b>, more <b>efficient</b>, and more <b>interpretable</b>!</i>
+    </p>
+    <img width="820" alt="inference with different compute per token" src="assets/teaser.png">
+    <p>:open_book: See more visual results on our <a href="https://crystalai.org/blog/2025-08-18-compute-where-it-counts" target="_blank">project page</a></p>
+</div>
 
+<br>
+
+<details open>
+<summary><b>Stats</b></summary>
+    <br>
+    <div align="center">
+        <p align="justify">
+            
 1. CWIC yields a 3x increase in CPU throughput with only a 10% reduction in benchmark performance.
 
 2. CWIC uses a different amount of compute for each token, making task difficulty interpretable.
@@ -13,21 +53,46 @@
 3. CWIC directly optimizes compute as a loss function, and learns to budget compute without labelled data or hand-crafted heuristics.
 
 4. The CWIC architecture uses learned activation thresholds and expressive sparsity patterns to enable adaptive computation.
+        </p>
+    </div>
+</details>
 
 Read more [on our blog](https://crystalai.org/blog/2025-08-18-compute-where-it-counts)!
 
-## Installation (on Linux or MacOS Arm64)
-```sh
-curl -fsSL https://pixi.sh/install.sh | sh
-source ~/.bashrc
 
-pixi shell
-```
+
+## :fire: News
+
+- [Aug 25, 2025] torch training code is ready!
+- [Aug 22, 2025] torch inference code and huggingface weights are released!
+- [Aug 18, 2025] blog & jax training code is released!
+
+
+## 🔧 Installation
+
+1. Clone Repo
+    ```bash
+    git clone https://github.com/crystal-ai-org/cwic
+    cd cwic
+    ```
+
+2. Install Pixi to manage the python environment
+    ```bash
+    curl -fsSL https://pixi.sh/install.sh | sh
+    source ~/.bashrc # make sure pixi in path
+    ```
+3. Install Python Dependencies
+    
+    ```
+    pixi shell
+    ```
+<!-- 
+![A diagram demontrating the increased expressiveness of granular sparsity.](./assets/sparsity_patterns.svg) -->
 
 ## Usage
 
 ### Inference
-```sh
+```bash
 python cwic/chat_with_it.py
 ```
 This will let you chat with one of our [**Pretrained Models**](#pretrained-models) models and get output highlighted based off active parameters used!
@@ -42,11 +107,11 @@ The model output is highlighted to indicate the amount of compute spent on each.
 ```sh
 wandb login
 # gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
-# CWIC train a huggingface model directly XXX
+# CWIC train a huggingface model directly
 python cwic/train.py
 # or
-# train using jax
-python cwic/cwic_scripts/train_cwic.py
+# train using the original jax code for the paper
+# python cwic/cwic_scripts/train_cwic.py
 ```
 # Pretrained Models
 
