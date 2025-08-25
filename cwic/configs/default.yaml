@@ -1,5 +1,5 @@
 
-run_name: cwic_train
+run_name: torch-training-iso
 
 wandb_entity: null
 wandb_project: cwic
@@ -8,26 +8,26 @@ teacher_model: unsloth/Llama-3.2-1B-Instruct
 
 batch_size: 8
 
-checkpoint_interval: 1000
+checkpoint_interval: 16000
 
-start_compute_reduction: 1.5
+start_compute_reduction: 1.0
 end_compute_reduction: 6.0
-compute_reduction_steps: 10000
+compute_reduction_steps: 160000
 
 model:
 
   stripe_size: 1024
   head_stripe_size: 8192
 
-  head_limit: 10.0
+  head_limit: 100.0
 
   threshold_lr_scale: 10.0
-  threshold_init: 0.1
+  threshold_init: 0.0
   threshold_minimum: 0.001
 
   bandwidth: 0.1
 
-  stats_beta: 0.99
+  stats_beta: 0.9993720513
   median_iters: 3
 
 
@@ -41,10 +41,10 @@ dataset:
 
 optimizer:
 
-  lr: 0.00001
-  weight_decay: 0.001
+  lr: 0.000003061862178
+  weight_decay: 0.016
 
-  betas: [0.9, 0.95]
+  betas: [0.9934366016, 0.9967993023]
 
 
 lr_scheduler:

@@ -38,14 +38,15 @@ The model output is highlighted to indicate the amount of compute spent on each.
 (If on MacOS, it's recommended to run this script in a code editor terminal, ghostty or iTerm. Running it in default Terminal.app doesn't seem to display the highlights.)
 
 ### Training
-## Training in torch is currently broken, you can run the JAX based training though and then convert the checkpoints
+<!-- ## Training in torch is currently broken, you can run the JAX based training though and then convert the checkpoints -->
 ```sh
 wandb login
 # gcloud auth application-default login --no-launch-browser # for saving checkpoints to google cloud
+# CWIC train a huggingface model directly XXX
+python cwic/train.py
+# or
 # train using jax
 python cwic/cwic_scripts/train_cwic.py
-# CWIC train a huggingface model directly XXX
-# python cwic/train.py
 ```
 # Pretrained Models
 
