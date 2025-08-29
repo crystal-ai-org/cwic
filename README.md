@@ -14,19 +14,7 @@
         </a>
         <img src="https://visitor-badge.laobi.icu/badge?page_id=crystal-ai-org.cwic">
     </h4>
-    <div >
-        <a>Cyris Kissane</a><sup>1*</sup>&emsp;
-        <a>Adam Klein</a><sup>1*</sup>&emsp;
-        <a>Niveditha Iyer</a><sup>1*</sup>&emsp;
-    </div>
-    <div>
-        Crystal Computing Corp.<sup>1</sup>
-        <br>
-        <sup>*</sup>equal contribution
-    </div>
 </div>
-
-<br>
 
 <div align="center">
     <p>
@@ -34,7 +22,7 @@
         <br>
         <i>⭐ CWIC makes models <b>faster</b>, more <b>efficient</b>, and more <b>interpretable</b>!</i>
     </p>
-    <img width="820" alt="inference with different compute per token" src="assets/teaser.png">
+    <img width="800" alt="inference with different compute per token" src="assets/teaser.png">
     <p>:open_book: See more visual results on our <a href="https://crystalai.org/blog/2025-08-18-compute-where-it-counts" target="_blank">project page</a></p>
 </div>
 
@@ -42,8 +30,6 @@
 
 <details open>
 <summary><b>Stats</b></summary>
-    <br>
-    <div align="center">
         <p align="justify">
             
 1. CWIC yields a 3x increase in CPU throughput with only a 10% reduction in benchmark performance.
@@ -54,11 +40,9 @@
 
 4. The CWIC architecture uses learned activation thresholds and expressive sparsity patterns to enable adaptive computation.
         </p>
-    </div>
 </details>
 
-Read more [on our blog](https://crystalai.org/blog/2025-08-18-compute-where-it-counts)!
-
+Made with ❤️ by Cyris, Adam and Niveditha at Crystal Computing Corp.
 
 
 ## :fire: News
