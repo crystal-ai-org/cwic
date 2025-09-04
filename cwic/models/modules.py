@@ -297,10 +297,7 @@ class CWICMLP(nn.Module):
         self.act_fn = ACT2FN[hidden_act]
 
         self.distribution_tracker = RobustDistributionTracker(
-            inter_features, beta=stats_beta, num_iters=median_iters, eps=eps
-        )
-        self.mad_tracker = RobustDistributionTracker(
-            self.inter_features, beta=stats_beta, num_iters=median_iters, eps=eps
+            inter_features, beta=stats_beta, num_iters=median_iters, eps=eps, zero_mean=True
         )
 
     def forward(
@@ -312,13 +309,12 @@ class CWICMLP(nn.Module):
         z, gate_dense_params, gate_active_params = self.gate(x, statistics_mask=statistics_mask)
         z = self.act_fn(z)
 
-        std = self.distribution_tracker(z, statistics_mask=statistics_mask)[1]
-        mad = self.mad_tracker(z.abs(), statistics_mask=statistics_mask)[0]
+        rms = self.distribution_tracker(z, statistics_mask=statistics_mask)[1]
 
-        thresholds = (self.thresholds * self.threshold_lr_scale * mad).view(
+        thresholds = (self.thresholds * self.threshold_lr_scale * rms).view(
             *[1 for _ in range(x.ndim - 1)], -1
         )
-        bandwidth = (self.bandwidth * std).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
+        bandwidth = (self.bandwidth * rms).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
 
         z_masked, mask = step_with_grads(z, z.abs(), thresholds, bandwidth)
 
@@ -360,12 +356,14 @@ class RobustDistributionTracker(nn.Module):
         beta: float = 0.99,
         num_iters: int = 3,
         eps: float = 1e-7,
+        zero_mean: bool = False
     ):
         super().__init__()
         self.hidden_size = hidden_size
         self.beta = beta
         self.num_iters = num_iters
         self.eps = eps
+        self.zero_mean = zero_mean
 
         self.register_buffer("steps", torch.zeros((), dtype=torch.float32), persistent=True)
 
@@ -396,13 +394,16 @@ class RobustDistributionTracker(nn.Module):
                 else:
                     statistics_mask = torch.ones_like(x[:, :1])
 
-                new_med = robust_mean(
-                    x,
-                    num_iters=self.num_iters,
-                    dim=0,
-                    mask=statistics_mask,
-                    eps=self.eps,
-                )
+                if self.zero_mean:
+                    new_med = torch.zeros_like(self.med)
+                else:
+                    new_med = robust_mean(
+                        x,
+                        num_iters=self.num_iters,
+                        dim=0,
+                        mask=statistics_mask,
+                        eps=self.eps,
+                    )
                 self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
                 med_debiased = self.med * debiaser
 
