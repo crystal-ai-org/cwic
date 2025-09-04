@@ -1,39 +1,50 @@
 
-run_name: torch-training-iso
+run_name: cwic-default
 
 wandb_entity: null
-wandb_project: cwic
+wandb_project: cwic-iclr
 
-teacher_model: unsloth/Llama-3.2-1B-Instruct
+teacher_model: unsloth/Llama-3.2-1B
+student_model: null
 
+max_length: 1024
 batch_size: 8
-gradient_accumulations: 16
+grad_accum_steps: 8
+kd_chunk_size: null
 
-checkpoint_interval: 1000
+compile: false
+
+mse_weight: 1.0
+max_grad_norm: 1.0
 
 start_compute_reduction: 1.0
-end_compute_reduction: 6.0
-compute_reduction_steps: 10000
+end_compute_reduction: 8.0
+compute_reduction_steps: 5000
+
+checkpoint_interval: 714
+
 model:
 
   stripe_size: 1024
-  head_stripe_size: 8192
+  head_stripe_size: 16384
 
-  head_limit: 100.0
+  head_limit: null
 
   threshold_lr_scale: 10.0
-  threshold_init: 0.0
+  threshold_init: 0.001
   threshold_minimum: 0.001
 
   bandwidth: 0.1
 
   stats_beta: 0.99
-  median_iters: 3
+  median_iters: 1
+
+  # _attn_implementation: eager
 
 
 dataset:
 
-  path: crystal-ai/chat-compilation-benchmark-5x-Llama-3.2-Instruct-Shuffled
+  path: aklein4/fineweb-edu-sample-10BT-shuffled
 
   split: train
   streaming: true
@@ -41,7 +52,7 @@ dataset:
 
 optimizer:
 
-  lr: 0.00004898979485566357
+  lr: 1e-4
   weight_decay: 0.01
 
   betas: [0.9, 0.95]
@@ -51,5 +62,5 @@ lr_scheduler:
 
   name: linear
 
-  num_warmup_steps: 400
-  num_training_steps: 10000
+  num_warmup_steps: 100
+  num_training_steps: 7500

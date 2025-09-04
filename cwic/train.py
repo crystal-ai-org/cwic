@@ -16,11 +16,15 @@ from transformers import (
 from transformers.utils import logging
 
 from models.convert import llama_to_cwic
-from utils.data_utils import DeviceCollator
+from utils.data_utils import TokenCollator
 from utils.loss_utils import (
-    kd_loss_fn,
-    flop_loss_fn,
+    KDLossModule,
+    MSELossModule,
+    FlopLossModule,
+    get_total_active
 )
+from utils.torch_utils import grad_nan_to_num
+from models.modelling_cwic import CWICForCausalLM
 
 
 logger = logging.get_logger(__name__)
@@ -29,43 +33,96 @@ logger = logging.get_logger(__name__)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+class NormHook:
+    def __init__(self):
+        self.last = None
+
+    def __call__(self, norm, inp, out):
+        inp = inp[0]
+        inp = torch.nn.functional.rms_norm(
+            inp,
+            [inp.shape[-1]],
+            eps=norm.variance_epsilon,
+        )
+        
+        self.last = inp
+
+
 @hydra.main(version_base=None, config_path="configs", config_name="default")
 def main(config: omegaconf.DictConfig):
-    logger.info(f"Starting CWIC distillation training on device {str(DEVICE)}")
-
-    # Load the dataset
-    dataset = datasets.load_dataset(**config.dataset)
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=config.batch_size,
-        shuffle=False,
-        collate_fn=DeviceCollator(DEVICE),
-    )
-    logger.info(f"Loaded dataset {config.dataset.path} with batch size {config.batch_size}!")
+    logger.info(f"Starting PBit distillation training on device {str(DEVICE)}")
 
     # Load the teacher model
     teacher_tokenizer = AutoTokenizer.from_pretrained(config.teacher_model)
+    if teacher_tokenizer.pad_token_id is None:
+        teacher_tokenizer.pad_token_id = 0
     teacher_model = LlamaForCausalLM.from_pretrained(
         config.teacher_model,
         device_map=DEVICE,
     )
+    hidden_states_hook = NormHook()
+    teacher_model.model.norm.register_forward_hook(hidden_states_hook)
     teacher_model.eval()
     logger.info(f"Loaded teacher model {config.teacher_model}!")
 
-    # convert the teacher model to CWIC format
-    student_model = llama_to_cwic(teacher_model, **config.model)
+    # Initialize the student model from the teacher
+    if config.student_model is not None:
+        student_model = CWICForCausalLM.from_pretrained(
+            config.student_model,
+            device_map=DEVICE,
+        )
+        logger.info(f"Loaded student model {config.student_model}!")
+    else:
+        student_model = llama_to_cwic(
+            teacher_model,
+            **config.model
+        )
+        logger.info(f"Initialized student model from teacher!")
     # we keep the teacher model in its original format (important for some models)
-    # but CWIC works best in float32
+    # but we want the student in float32
     student_model = student_model.to(torch.float32)
     student_model.train()
     student_model.gradient_checkpointing_enable()
-    logger.info("Converted teacher model to CWIC format!")
+    student_model.mse_weight = config.mse_weight
+    logger.info("Student model is ready for training!")
 
-    optimizer = torch.optim.AdamW(student_model.parameters(), **config.optimizer)
+    # Load the dataset
+    total_batch_size = config.batch_size * config.grad_accum_steps
+    dataset = datasets.load_dataset(**config.dataset)
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=total_batch_size,
+        shuffle=False,
+        collate_fn=TokenCollator(teacher_tokenizer, config.max_length, DEVICE),
+    )
+    logger.info(f"Loaded dataset {config.dataset.path} with batch_size {config.batch_size} and max_length {config.max_length}!")
+
+    # load the optimizer
+    training_params = list(student_model.parameters())
+    training_params.remove(student_model.model.embed_tokens.weight)
+    optimizer = torch.optim.AdamW(
+        training_params,
+        **config.optimizer
+    )
     lr_scheduler = get_scheduler(optimizer=optimizer, **config.lr_scheduler)
     logger.info(
         f"Initialized AdamW optimizer and {config.lr_scheduler.name} learning rate scheduler!"
     )
+
+    # load the loss functions
+    kd_loss_fn = KDLossModule(config.kd_chunk_size)
+    scaled_mse_fn = MSELossModule()
+    flop_loss_fn = FlopLossModule()
+
+    # compile if requested
+    old_student_model_model = student_model.model
+    if config.compile:
+        teacher_model.model = torch.compile(teacher_model.model, fullgraph=True)
+        student_model.model = torch.compile(student_model.model, fullgraph=True)
+        kd_loss_fn = torch.compile(kd_loss_fn, fullgraph=True)
+        scaled_mse_fn = torch.compile(scaled_mse_fn, fullgraph=True)
+        flop_loss_fn = torch.compile(flop_loss_fn, fullgraph=True)
+        logger.info("Added compilation to the models and loss functions!")
 
     wandb.init(
         project=config.wandb_project,
@@ -77,79 +134,130 @@ def main(config: omegaconf.DictConfig):
 
     pbar = tqdm(desc="CWIC Distillation")
     step = 0
-    seen_tokens_combined = 0
-    i = 0
-    for batch in dataloader:
-        i+=1
+    seen_tokens = 0
+    prev_ratio = None
+
+    for total_batch in dataloader:
         
-        mask = batch["pad_mask.npy"].float()
-        seen_tokens_combined+=mask.sum().item()
-
-        with torch.no_grad():
-            teacher_output = teacher_model(
-                input_ids=batch["input_ids.npy"],
-            )
-        student_output = student_model(
-            input_ids=batch["input_ids.npy"],
-            statistics_mask=mask,
-        )
-
         compute_gain = config.end_compute_reduction - config.start_compute_reduction
         target_ratio = config.start_compute_reduction + compute_gain * np.clip(
             step / config.compute_reduction_steps, a_min=0.0, a_max=1.0
         )
 
-        kd_loss = kd_loss_fn(
-            student_output.logits, teacher_output.logits.to(student_output.logits.dtype), mask=mask
-        )
-        flop_loss, flop_reduction = flop_loss_fn(
-            student_output.active_parameters,
-            student_output.dense_parameters,
-            target_ratio=target_ratio,
-            mask=mask,
-        )
+        mini_batches = [{} for _ in range(config.grad_accum_steps)]
+        for k, v in total_batch.items():
+            for b, v_mini in enumerate(torch.chunk(v, config.grad_accum_steps, dim=0)):
+                mini_batches[b][k] = v_mini
 
-        loss = kd_loss + flop_loss
-        loss.backward()
-        if i%config.gradient_accumulations==0:
-            optimizer.step()
-            optimizer.zero_grad(True)
-            lr_scheduler.step()
+        total_aux = {}
+        total_active = 0.0
+        total_dense = 0.0
+        for batch in mini_batches:
+            
+            mask = (batch["input_ids"] != teacher_tokenizer.pad_token_id).float()
+            seen_tokens += mask.sum().item()
 
-            student_model.clip_thresholds()
-
-            pbar.update(1)
-            pbar.set_postfix(
-                {
-                    "kd_loss": kd_loss.item(),
-                    "FRR": flop_reduction.item(),
-                    "FRR_targ": target_ratio,
-                }
+            with torch.no_grad():
+                teacher_output = teacher_model(
+                    input_ids=batch["input_ids"],
+                    use_cache=False,
+                )
+            student_output = student_model(
+                input_ids=batch["input_ids"],
+                statistics_mask=mask,
+                use_cache=False,
             )
 
-            wandb.log(
-                {
-                    "kd_loss/combined": loss.item(),
-                    "kd_loss/logits/twoway": kd_loss.item(),
-                    "flop_loss/combined": flop_loss.item(),
-                    "flop_ratios/combined": flop_reduction.item(),
-                    "target_flop_reduction": target_ratio,
-                    "seen_tokens/combined": seen_tokens_combined
-                },
+            kl_loss, rkl, fkl = kd_loss_fn(
+                student_output.logits,
+                teacher_output.logits,
+                mask=mask
+            )
+            flop_loss = flop_loss_fn(
+                student_output.active_parameters,
+                student_output.dense_parameters,
+                target_ratio=target_ratio,
+                mask=mask,
+                base_ratio=prev_ratio,
+            )
+            mse_loss = scaled_mse_fn(
+                student_output.projected_hidden_states,
+                hidden_states_hook.last,
+                mask=mask
             )
 
-            step += 1
+            active, dense = get_total_active(
+                student_output.active_parameters,
+                student_output.dense_parameters,
+                mask=mask,
+            )
+            total_active = total_active + active.detach()
+            total_dense = total_dense + dense.detach()
 
-            if step % config.checkpoint_interval == 0:
-                with torch.no_grad():
-                    logger.info(f"Saving checkpoint at step {step}...")
+            loss = kl_loss + flop_loss + mse_loss
 
-                    ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}.pt")
+            aux = {
+                "loss": loss,
+                "kl_loss": kl_loss,
+                "rkl": rkl,
+                "fkl": fkl,
+                "flop_loss": flop_loss,
+                "mse_loss": mse_loss,
+            }
+            for k, v in aux.items():
+                if k not in total_aux.keys():
+                    total_aux[k] = v
+                else:
+                    total_aux[k] = total_aux[k] + v
 
-                    student_model.save_pretrained(ckpt_path)
-                    teacher_tokenizer.save_pretrained(ckpt_path)
+            loss.backward()
 
-                    logger.info(f"Checkpoint saved to {ckpt_path}!")
+        prev_ratio = (total_dense / total_active).detach().view(1)
+
+        total_aux = {k: v.item() / config.grad_accum_steps for k, v in total_aux.items()}
+        total_aux["flop_reduction"] = prev_ratio.item()
+        total_aux["target_flop_reduction"] = target_ratio
+        total_aux["lr"] = lr_scheduler.get_last_lr()[0]
+
+        grad_nan_to_num(student_model)
+        total_aux["grad_norm"] = torch.nn.utils.clip_grad_norm_(
+            student_model.parameters(), config.max_grad_norm
+        ).item()
+
+        optimizer.step()
+        optimizer.zero_grad(True)
+        lr_scheduler.step()
+
+        student_model.clip_thresholds()
+
+        pbar.update(1)
+        pbar.set_postfix(
+            {
+                "kl_loss": total_aux["kl_loss"],
+                "FRR": total_aux["flop_reduction"],
+                "FRR_targ": total_aux["target_flop_reduction"],
+            }
+        )
+
+        wandb.log(total_aux)
+
+        step += 1
+
+        if step % config.checkpoint_interval == 0:
+            with torch.no_grad():
+                logger.info(f"Saving checkpoint at step {step}...")
+
+                ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}")
+
+                tmp_model = student_model.model
+                student_model.model = old_student_model_model
+
+                student_model.save_pretrained(ckpt_path)
+                teacher_tokenizer.save_pretrained(ckpt_path)
+
+                student_model.model = tmp_model
+
+                logger.info(f"Checkpoint saved to {ckpt_path}!")
 
 
 if __name__ == "__main__":

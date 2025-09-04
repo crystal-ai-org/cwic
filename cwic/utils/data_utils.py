@@ -3,6 +3,35 @@ import torch
 import numpy as np
 
 
+class TokenCollator:
+
+    def __init__(self, tokenizer, max_length, device=None):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
+
+    
+    def __call__(self, batch):
+
+        texts = [b["text"] for b in batch]
+        input_ids = self.tokenizer(
+            texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+        ).input_ids
+
+        out = {
+            "input_ids": input_ids.to(self.device),
+        }
+
+        return out
+
+
 class DeviceCollator:
 
     def __init__(self, device=None):

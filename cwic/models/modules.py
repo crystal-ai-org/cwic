@@ -97,6 +97,7 @@ class CWICLinear(GradientCheckpointingLayer):
             self.in_features, beta=stats_beta, num_iters=median_iters, eps=eps
         )
 
+        self.use_parameter_cache = False
         self.cached_weight = None
         self.cached_post_mu = None
         self.cached_thresholds = None
@@ -105,8 +106,9 @@ class CWICLinear(GradientCheckpointingLayer):
 
         f = lambda x: x.T.view(1, self.num_stripes, self.stripe_size, self.in_features)
 
-        if self.training:
-            self.cached_weight = None
+        if self.training or not self.use_parameter_cache:
+            if self.cached_weight is not None:
+                self.cached_weight = None
             return f(self.weight)
 
         else:
@@ -120,8 +122,9 @@ class CWICLinear(GradientCheckpointingLayer):
 
         f = lambda x, y: torch.einsum("a b, a -> b", x, y)
 
-        if self.training:
-            self.cached_post_mu = None
+        if self.training or not self.use_parameter_cache:
+            if self.cached_post_mu is not None:
+                self.cached_post_mu = None
             return f(self.weight, mu)
 
         else:
@@ -135,8 +138,9 @@ class CWICLinear(GradientCheckpointingLayer):
 
         f = lambda x, s: (x * s[None] * self.threshold_lr_scale)[None]
 
-        if self.training:
-            self.cached_thresholds = None
+        if self.training or not self.use_parameter_cache:
+            if self.cached_thresholds is not None:
+                self.cached_thresholds = None
             return f(self.thresholds, std)
 
         else:
@@ -334,20 +338,18 @@ def step_with_grads(
     x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
 
+
     mask = (x_gate > thresholds).to(x.dtype)
+    kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
 
-    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
-    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
-
-    g_mask = attach_gradient(g_kernel, mask)
-    nog_mask = attach_gradient(nog_kernel, mask)
+    mask = attach_gradient(mask, kernel)
 
     out = attach_gradient(
-        x,
-        x.detach() * nog_mask,
+        x.detach() * mask,
+        x
     )
 
-    return out, g_mask
+    return out, mask
 
 
 class RobustDistributionTracker(nn.Module):
@@ -381,6 +383,7 @@ class RobustDistributionTracker(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = x.detach()
 
+        # TODO: this currently only works with gradient checkpointing
         if self.training and not torch.is_grad_enabled():
             with torch.no_grad():
 
@@ -393,13 +396,12 @@ class RobustDistributionTracker(nn.Module):
                 else:
                     statistics_mask = torch.ones_like(x[:, :1])
 
-                new_med = geometric_median(
+                new_med = robust_mean(
                     x,
                     num_iters=self.num_iters,
                     dim=0,
                     mask=statistics_mask,
                     eps=self.eps,
-                    verbose=False,  # (self.steps < 1.5).all()
                 )
                 self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
                 med_debiased = self.med * debiaser
@@ -421,31 +423,25 @@ class RobustDistributionTracker(nn.Module):
         return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
 
 
-def geometric_median(x, num_iters, dim, mask=None, eps=1e-7, verbose=False):
+def robust_mean(
+    x,
+    num_iters,
+    dim,
+    mask=None,
+    eps=1e-7,
+):
     assert num_iters >= 0
 
     if mask is None:
         mask = torch.ones_like(x)
 
-    x = x * mask
-    scale = 1 / (mask.mean(dim, keepdim=True) + eps)
-
-    mu = x.mean(dim, keepdim=True) * scale
-
-    if verbose:
-        print(f"Target Median: {torch.median(x, dim=dim).values}")
-        print(f"Initial Mu: {mu.squeeze(dim)}")
+    mu = (x * mask).mean(dim=dim, keepdim=True) / (mask.mean(dim=dim, keepdim=True) + eps)
 
     for _ in range(num_iters):
-        if verbose:
-            print(f"Iteration {_} Mu: {mu.squeeze(dim)}")
 
-        w = 1 / ((x - mu).abs() + eps)
+        w = mask / ((x - mu).abs() + eps)
         w = w / (w.mean(dim, keepdim=True) + eps)
 
-        mu = (x * w).mean(dim, keepdim=True) * scale
-
-    if verbose:
-        print(f"Final Mu: {mu.squeeze(dim)}")
+        mu = (x * w).mean(dim, keepdim=True)
 
     return mu.squeeze(dim)
