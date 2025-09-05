@@ -441,7 +441,7 @@ def robust_mean(
     mask=None,
     eps=1e-7,
 ):
-    assert num_iters >= 0
+    assert num_iters >= 1
 
     if mask is None:
         mask = torch.ones_like(x)
