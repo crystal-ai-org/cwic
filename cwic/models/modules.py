@@ -174,6 +174,8 @@ class CWICLinear(GradientCheckpointingLayer):
         # [I], [I]
         mu, std = self.distribution_tracker(x, statistics_mask=statistics_mask)
 
+        std = std.mean(-1, keepdim=True).expand(*std.shape)
+
         # [B, 1, I]
         og_shape = x.shape[:-1]
         batched = math.prod(og_shape) > 1
@@ -310,6 +312,7 @@ class CWICMLP(nn.Module):
         z = self.act_fn(z)
 
         rms = self.distribution_tracker(z, statistics_mask=statistics_mask)[1]
+        rms = rms.mean(-1, keepdim=True).expand(*rms.shape)
 
         thresholds = (self.thresholds * self.threshold_lr_scale * rms).view(
             *[1 for _ in range(x.ndim - 1)], -1
