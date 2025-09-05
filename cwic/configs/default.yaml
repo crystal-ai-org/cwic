@@ -31,8 +31,8 @@ model:
   head_limit: null
 
   threshold_lr_scale: 10.0
-  threshold_init: 0.001
-  threshold_minimum: 0.001
+  threshold_init: 0.0001
+  threshold_minimum: 0.0001
 
   bandwidth: 0.1
 
