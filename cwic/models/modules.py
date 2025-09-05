@@ -174,7 +174,7 @@ class CWICLinear(GradientCheckpointingLayer):
         # [I], [I]
         mu, std = self.distribution_tracker(x, statistics_mask=statistics_mask)
 
-        std = std.mean(-1, keepdim=True).expand(*std.shape)
+        # std = std.mean(-1, keepdim=True).expand(*std.shape)
 
         # [B, 1, I]
         og_shape = x.shape[:-1]
@@ -313,7 +313,7 @@ class CWICMLP(nn.Module):
         z = self.act_fn(z)
 
         rms = self.distribution_tracker(z, statistics_mask=statistics_mask)[1]
-        rms = rms.mean(-1, keepdim=True).expand(*rms.shape)
+        # rms = rms.mean(-1, keepdim=True).expand(*rms.shape)
 
         thresholds = (self.thresholds * self.threshold_lr_scale * rms).view(
             *[1 for _ in range(x.ndim - 1)], -1
@@ -346,7 +346,7 @@ def step_with_grads(
     # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
     # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
 
-    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan((thresholds-x_gate)/std)/torch.pi)
+    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan((thresholds**2-x_gate**2)/std**2)/torch.pi)
     # nog_mask = attach_gradient(mask, nog_kernel)
 
     out = attach_gradient(
@@ -405,7 +405,7 @@ class RobustDistributionTracker(nn.Module):
         x = x.detach()
 
         # TODO: this currently only works with gradient checkpointing
-        if self.training and not torch.is_grad_enabled():
+        if self.training: # and not torch.is_grad_enabled():
             with torch.no_grad():
 
                 x = x.view(-1, self.hidden_size)
@@ -440,14 +440,14 @@ class RobustDistributionTracker(nn.Module):
                 aad_debiased = self.aad * debiaser
 
                 # assuming that x is gaussian, we scale the AAD to get the STD
-                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)*0.0+1.0
+                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
 
         debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
 
         med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser
 
-        return med_debiased, aad_debiased / math.sqrt(2 / math.pi)*0.0+1.0
+        return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
 
 
 def robust_mean(
