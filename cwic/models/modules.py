@@ -371,13 +371,13 @@ class RobustDistributionTracker(nn.Module):
         self.eps = eps
         self.zero_mean = zero_mean
 
-        self.register_buffer("steps", torch.zeros((), dtype=torch.float32)+eps, persistent=True)
+        self.register_buffer("steps", torch.zeros((), dtype=torch.float32), persistent=True)
 
         self.register_buffer(
             "med", torch.zeros((hidden_size,), dtype=torch.float32), persistent=True
         )
         self.register_buffer(
-            "aad", torch.zeros((hidden_size,), dtype=torch.float32)+eps, persistent=True
+            "aad", torch.zeros((hidden_size,), dtype=torch.float32), persistent=True
         )
 
     def forward(
@@ -398,7 +398,7 @@ class RobustDistributionTracker(nn.Module):
                     statistics_mask = torch.ones_like(x[:, :1])
                 step_delta = statistics_mask.mean()
                 step_beta = self.beta ** step_delta
-                old_debiaser = 1 / (1 - self.beta**self.steps)
+                old_debiaser = 1 / (1 - self.beta**self.steps+self.eps)
                 self.steps += 1.0
                 debiaser = 1 / (1 - self.beta**self.steps)
 
