@@ -341,34 +341,34 @@ def step_with_grads(
 
 
 
-    mask = (x_gate > thresholds).to(x.dtype)
-
-    # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
-    # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
-
-    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan(x_gate*(thresholds-x_gate)/std**2)/torch.pi)
-    # nog_mask = attach_gradient(mask, nog_kernel)
-
-    out = attach_gradient(
-        x.detach() * g_mask,
-        x,
-    )
-
-    return out, g_mask
     # mask = (x_gate > thresholds).to(x.dtype)
 
-    # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
-    # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
+    # # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
+    # # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
 
-    # g_mask = attach_gradient(mask, g_kernel)
-    # nog_mask = attach_gradient(mask, nog_kernel)
+    # g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan(x_gate*(thresholds-x_gate)/std**2)/torch.pi)
+    # # nog_mask = attach_gradient(mask, nog_kernel)
 
     # out = attach_gradient(
-    #     x.detach() * nog_mask,
+    #     x.detach() * g_mask,
     #     x,
     # )
 
     # return out, g_mask
+    mask = (x_gate > thresholds).to(x.dtype)
+
+    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
+    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+
+    g_mask = attach_gradient(mask, g_kernel)
+    nog_mask = attach_gradient(mask, nog_kernel)
+
+    out = attach_gradient(
+        x.detach() * nog_mask,
+        x,
+    )
+
+    return out, g_mask
 
 
 class RobustDistributionTracker(nn.Module):
