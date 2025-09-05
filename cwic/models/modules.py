@@ -417,7 +417,7 @@ class RobustDistributionTracker(nn.Module):
                 step_beta = self.beta ** step_delta
                 old_debiaser = 1 / (1 - self.beta**self.steps+self.eps)
                 accrued=1 - self.beta**self.steps
-                self.steps += 1.0
+                self.steps += step_delta
                 debiaser = 1 / (1 - self.beta**self.steps+self.eps)
                 new_accrued=1 - self.beta**self.steps
 
@@ -430,7 +430,7 @@ class RobustDistributionTracker(nn.Module):
                         num_iters=self.num_iters,
                         dim=0,
                         mask=statistics_mask,
-                        obeta=(1-step_beta)/(new_accrued),
+                        obeta=torch.log(1.0+step_beta*accrued/(new_accrued*(1-step_beta))),
                         eps=self.eps,
                     )
                 self.med.copy_(new_med)#step_beta * self.med + (1 - step_beta) * new_med)
