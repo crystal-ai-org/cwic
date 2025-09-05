@@ -371,13 +371,13 @@ class RobustDistributionTracker(nn.Module):
         self.eps = eps
         self.zero_mean = zero_mean
 
-        self.register_buffer("steps", torch.zeros((), dtype=torch.float32), persistent=True)
+        self.register_buffer("steps", torch.zeros((), dtype=torch.float32)+eps, persistent=True)
 
         self.register_buffer(
             "med", torch.zeros((hidden_size,), dtype=torch.float32), persistent=True
         )
         self.register_buffer(
-            "aad", torch.zeros((hidden_size,), dtype=torch.float32), persistent=True
+            "aad", torch.zeros((hidden_size,), dtype=torch.float32)+eps, persistent=True
         )
 
     def forward(
