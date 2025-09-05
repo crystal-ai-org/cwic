@@ -400,7 +400,7 @@ class RobustDistributionTracker(nn.Module):
                 step_beta = self.beta ** step_delta
                 old_debiaser = 1 / (1 - self.beta**self.steps+self.eps)
                 self.steps += 1.0
-                debiaser = 1 / (1 - self.beta**self.steps)
+                debiaser = 1 / (1 - self.beta**self.steps+self.eps)
 
                 if self.zero_mean:
                     new_med = torch.zeros_like(self.med)
