@@ -15,7 +15,7 @@ kd_chunk_size: null
 compile: false
 
 mse_weight: 1.0
-max_grad_norm: 100000.0
+max_grad_norm: 1.0
 
 start_compute_reduction: 1.05
 end_compute_reduction: 8.0
