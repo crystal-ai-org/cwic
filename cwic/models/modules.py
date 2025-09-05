@@ -436,7 +436,10 @@ def robust_mean(
     if mask is None:
         mask = torch.ones_like(x)
 
-    mu = (x * mask).mean(dim=dim, keepdim=True) / (mask.mean(dim=dim, keepdim=True) + eps)
+    w = mask
+    w = w / (w.mean(dim, keepdim=True) + eps)
+
+    mu = (x * w).mean(dim=dim, keepdim=True)
 
     for _ in range(num_iters):
 
