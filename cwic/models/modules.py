@@ -416,22 +416,25 @@ class RobustDistributionTracker(nn.Module):
                 step_delta = statistics_mask.mean()
                 step_beta = self.beta ** step_delta
                 old_debiaser = 1 / (1 - self.beta**self.steps+self.eps)
+                accrued=1 - self.beta**self.steps
                 self.steps += 1.0
                 debiaser = 1 / (1 - self.beta**self.steps+self.eps)
+                new_accrued=1 - self.beta**self.steps
 
                 if self.zero_mean:
                     new_med = torch.zeros_like(self.med)
                 else:
                     new_med = robust_mean(
                         x,
-                        init_mu=self.med * old_debiaser,
+                        init_mu=self.med,
                         num_iters=self.num_iters,
                         dim=0,
                         mask=statistics_mask,
+                        obeta=(1-step_beta)/(new_accrued),
                         eps=self.eps,
                     )
-                self.med.copy_(step_beta * self.med + (1 - step_beta) * new_med)
-                med_debiased = self.med * debiaser
+                self.med.copy_(new_med)#step_beta * self.med + (1 - step_beta) * new_med)
+                med_debiased = self.med
 
                 new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
                     0
@@ -444,7 +447,7 @@ class RobustDistributionTracker(nn.Module):
 
         debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
 
-        med_debiased = self.med * debiaser
+        med_debiased = self.med
         aad_debiased = self.aad * debiaser
 
         return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
@@ -456,6 +459,7 @@ def robust_mean(
     num_iters,
     dim,
     mask=None,
+    obeta=1.0,
     eps=1e-7,
 ):
     assert num_iters >= 1
@@ -471,7 +475,7 @@ def robust_mean(
 
     for _ in range(num_iters):
 
-        w = mask / ((x - mu).abs() + eps)
+        w = mask / ((x - mu).abs()**(1-obeta) + eps)
         w = w / (w.mean(dim, keepdim=True) + eps)
 
         mu = (x * w).mean(dim, keepdim=True)
