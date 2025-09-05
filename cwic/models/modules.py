@@ -475,7 +475,7 @@ def robust_mean(
 
     for _ in range(num_iters):
 
-        w = mask / ((x - mu).abs()**(1-obeta) + eps)
+        w = mask / ((x - mu).abs()**(1.0/obeta) + eps)
         w = w / (w.mean(dim, keepdim=True) + eps)
 
         mu = (x * w).mean(dim, keepdim=True)
