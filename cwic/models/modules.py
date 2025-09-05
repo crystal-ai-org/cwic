@@ -346,7 +346,7 @@ def step_with_grads(
     # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
     # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
 
-    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan((thresholds**2-x_gate**2)/std**2)/torch.pi)
+    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan(x_gate*(thresholds-x_gate)/std**2)/torch.pi)
     # nog_mask = attach_gradient(mask, nog_kernel)
 
     out = attach_gradient(
