@@ -190,10 +190,11 @@ class CWICLinear(GradientCheckpointingLayer):
         if smm is None or self.training or batched or self.stripe_size % 16 != 0:
 
             bandwidth = (self.bandwidth * std[None, None]) + self.eps  # [1, 1, I]
+            std_term = std[None, None] + self.eps
 
             # [B, N, I], [B, N, I]
             if self.training:
-                x_masked, mask = step_with_grads(x_demeaned, x_gate, thresholds, bandwidth)
+                x_masked, mask = step_with_grads(x_demeaned, x_gate, thresholds, bandwidth, std_term)
             else:
                 mask = (x_gate > thresholds).to(x.dtype)
                 x_masked = x_demeaned * mask
@@ -318,8 +319,9 @@ class CWICMLP(nn.Module):
             *[1 for _ in range(x.ndim - 1)], -1
         )
         bandwidth = (self.bandwidth * rms).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
+        std_term = (rms).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
 
-        z_masked, mask = step_with_grads(z, z.abs(), thresholds, bandwidth)
+        z_masked, mask = step_with_grads(z, z.abs(), thresholds, bandwidth, std_term)
 
         y = self.down(self.up(x) * z_masked)
 
@@ -334,24 +336,39 @@ class CWICMLP(nn.Module):
 
 
 def step_with_grads(
-    x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor
+    x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor, std: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+
 
 
     mask = (x_gate > thresholds).to(x.dtype)
 
-    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
-    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+    # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
+    # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
 
-    g_mask = attach_gradient(mask, g_kernel)
-    nog_mask = attach_gradient(mask, nog_kernel)
+    g_mask = attach_gradient(mask.detach(), 1.0-2.0*torch.arctan(thresholds/std)/torch.pi)
+    # nog_mask = attach_gradient(mask, nog_kernel)
 
     out = attach_gradient(
-        x.detach() * nog_mask,
+        x.detach() * g_mask,
         x,
     )
 
     return out, g_mask
+    # mask = (x_gate > thresholds).to(x.dtype)
+
+    # g_kernel = F.sigmoid(4 * (x_gate - thresholds) / bandwidth)
+    # nog_kernel = F.sigmoid(4 * (x_gate.detach() - thresholds) / bandwidth)
+
+    # g_mask = attach_gradient(mask, g_kernel)
+    # nog_mask = attach_gradient(mask, nog_kernel)
+
+    # out = attach_gradient(
+    #     x.detach() * nog_mask,
+    #     x,
+    # )
+
+    # return out, g_mask
 
 
 class RobustDistributionTracker(nn.Module):
@@ -423,14 +440,14 @@ class RobustDistributionTracker(nn.Module):
                 aad_debiased = self.aad * debiaser
 
                 # assuming that x is gaussian, we scale the AAD to get the STD
-                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
+                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)*0.0+1.0
 
         debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
 
         med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser
 
-        return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
+        return med_debiased, aad_debiased / math.sqrt(2 / math.pi)*0.0+1.0
 
 
 def robust_mean(
