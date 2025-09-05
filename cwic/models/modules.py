@@ -398,6 +398,7 @@ class RobustDistributionTracker(nn.Module):
                     statistics_mask = torch.ones_like(x[:, :1])
                 step_delta = statistics_mask.mean()
                 step_beta = self.beta ** step_delta
+                old_debiaser = 1 / (1 - self.beta**self.steps)
                 self.steps += 1.0
                 debiaser = 1 / (1 - self.beta**self.steps)
 
@@ -406,6 +407,7 @@ class RobustDistributionTracker(nn.Module):
                 else:
                     new_med = robust_mean(
                         x,
+                        init_mu=self.med * old_debiaser,
                         num_iters=self.num_iters,
                         dim=0,
                         mask=statistics_mask,
@@ -433,6 +435,7 @@ class RobustDistributionTracker(nn.Module):
 
 def robust_mean(
     x,
+    init_mu,
     num_iters,
     dim,
     mask=None,
@@ -443,10 +446,11 @@ def robust_mean(
     if mask is None:
         mask = torch.ones_like(x)
 
-    w = mask
-    w = w / (w.mean(dim, keepdim=True) + eps)
+    # w = mask
+    # w = w / (w.mean(dim, keepdim=True) + eps)
 
-    mu = (x * w).mean(dim=dim, keepdim=True)
+    # mu = (x * w).mean(dim=dim, keepdim=True)
+    mu = init_mu
 
     for _ in range(num_iters):
 
