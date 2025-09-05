@@ -391,14 +391,15 @@ class RobustDistributionTracker(nn.Module):
         if self.training and not torch.is_grad_enabled():
             with torch.no_grad():
 
-                self.steps += 1.0
-                debiaser = 1 / (1 - self.beta**self.steps)
-
                 x = x.view(-1, self.hidden_size)
                 if statistics_mask is not None:
                     statistics_mask = statistics_mask.view(-1, 1).to(x.dtype).detach()
                 else:
                     statistics_mask = torch.ones_like(x[:, :1])
+                step_delta = statistics_mask.mean()
+                step_beta = self.beta ** step_delta
+                self.steps += 1.0
+                debiaser = 1 / (1 - self.beta**self.steps)
 
                 if self.zero_mean:
                     new_med = torch.zeros_like(self.med)
@@ -410,13 +411,13 @@ class RobustDistributionTracker(nn.Module):
                         mask=statistics_mask,
                         eps=self.eps,
                     )
-                self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
+                self.med.copy_(step_beta * self.med + (1 - step_beta) * new_med)
                 med_debiased = self.med * debiaser
 
                 new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
                     0
                 ) / statistics_mask.mean(0)
-                self.aad.copy_(self.beta * self.aad + (1 - self.beta) * new_aad)
+                self.aad.copy_(step_beta * self.aad + (1 - step_beta) * new_aad)
                 aad_debiased = self.aad * debiaser
 
                 # assuming that x is gaussian, we scale the AAD to get the STD
