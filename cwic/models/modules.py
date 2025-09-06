@@ -366,7 +366,7 @@ def step_with_grads(
     # out = x * g_mask
     out = attach_gradient(
         x.detach() * g_mask,
-        x,
+        x * g_kernel,
     )
 
     return out, g_mask
