@@ -417,25 +417,26 @@ class RobustDistributionTracker(nn.Module):
                 step_delta = statistics_mask.mean()
                 step_beta = self.beta ** step_delta
                 old_debiaser = 1 / (1 - self.beta**self.steps+self.eps)
-                accrued=1 - self.beta**self.steps
+                accrued=1 - self.beta ** self.steps
                 self.steps += step_delta
-                debiaser = 1 / (1 - self.beta**self.steps+self.eps)
-                new_accrued=1 - self.beta**self.steps
+                debiaser = 1 / (1 - self.beta**self.steps + self.eps)
+                new_accrued = 1 - self.beta**self.steps
 
                 if self.zero_mean:
                     new_med = torch.zeros_like(self.med)
                 else:
                     new_med = robust_mean(
                         x,
-                        init_mu=self.med,
+                        init_mu=self.med*old_debiaser,
                         num_iters=self.num_iters,
                         dim=0,
                         mask=statistics_mask,
-                        obeta=torch.log(1.0+step_beta*accrued/(new_accrued*(1-step_beta))),
+                        obeta=accrued/new_accrued,
+                        # torch.log(1.0+step_beta*accrued/(new_accrued*(1-step_beta))),
                         eps=self.eps,
                     )
-                self.med.copy_(new_med)#step_beta * self.med + (1 - step_beta) * new_med)
-                med_debiased = self.med
+                self.med.copy_(step_beta * self.med + (1 - step_beta) * new_med)
+                med_debiased = self.med * debiaser
 
                 new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
                     0
@@ -448,7 +449,7 @@ class RobustDistributionTracker(nn.Module):
 
         debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
 
-        med_debiased = self.med
+        med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser
 
         return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
@@ -476,7 +477,7 @@ def robust_mean(
 
     for _ in range(num_iters):
 
-        w = mask / ((x - mu).abs()**(1.0/obeta) + eps)
+        w = mask / ((x - mu).abs()**(obeta) + eps)
         w = w / (w.mean(dim, keepdim=True) + eps)
 
         mu = (x * w).mean(dim, keepdim=True)
