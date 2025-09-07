@@ -355,18 +355,35 @@ def step_with_grads(
     # )
 
     # return out, g_mask
+    # mask = (x_gate > thresholds).to(x.dtype)
+
+    # g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / (bandwidth))
+    # # nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+
+    # g_mask = attach_gradient(mask, g_kernel)
+    # # nog_mask = attach_gradient(mask, g_kernel)
+
+    # # out = x * g_mask
+    # out = attach_gradient(
+    #     x.detach() * mask,
+    #     x * g_kernel,
+    # )
+
+    # return out, g_mask
+
+
+
     mask = (x_gate > thresholds).to(x.dtype)
 
-    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / (bandwidth))
-    # nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
+    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
 
     g_mask = attach_gradient(mask, g_kernel)
-    # nog_mask = attach_gradient(mask, g_kernel)
+    nog_mask = attach_gradient(mask, nog_kernel)
 
-    # out = x * g_mask
     out = attach_gradient(
-        x.detach() * mask,
-        x * g_kernel,
+        x.detach() * nog_mask,
+        x,
     )
 
     return out, g_mask
