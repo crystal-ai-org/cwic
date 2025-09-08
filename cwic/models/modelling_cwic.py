@@ -27,7 +27,7 @@ from transformers.utils.deprecation import deprecate_kwarg
 from transformers.utils.generic import check_model_inputs
 
 from cwic.models.configuration_cwic import CWICConfig
-from cwic.models.modules import CWICLinear, CWICMLP
+from cwic.models.modules import CWICLinear, CWICMLP, RobustDistributionTracker
 from cwic.models.outputs import (
     BaseModelOutputWithPastAndActiveParameters,
     CausalLMOutputWithPastAndActiveParameters,
@@ -407,6 +407,13 @@ class CWICPreTrainedModel(PreTrainedModel):
 
             if isinstance(m, CWICLinear):
                 m.use_parameter_cache = use
+
+    @torch.no_grad()
+    def prepare_tracking(self):
+        for m in self.modules():
+
+            if isinstance(m, RobustDistributionTracker):
+                m.first_pass = True
 
 
 

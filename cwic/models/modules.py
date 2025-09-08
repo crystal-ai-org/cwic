@@ -334,18 +334,20 @@ def step_with_grads(
     x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-
     mask = (x_gate > thresholds).to(x.dtype)
-    kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
 
-    mask = attach_gradient(mask, kernel)
+    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
+    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+
+    g_mask = attach_gradient(mask, g_kernel)
+    nog_mask = attach_gradient(mask, nog_kernel)
 
     out = attach_gradient(
-        x.detach() * mask,
+        x.detach() * nog_mask,
         x
     )
 
-    return out, mask
+    return out, g_mask
 
 
 class RobustDistributionTracker(nn.Module):
@@ -374,6 +376,12 @@ class RobustDistributionTracker(nn.Module):
             "aad", torch.zeros((hidden_size,), dtype=torch.float32), persistent=True
         )
 
+        self.first_pass = False
+
+    def _get_debiaser(self):
+        return 1 / (self.eps + (1 - self.beta**self.steps))
+
+    @torch.no_grad()
     def forward(
         self,
         x,
@@ -382,41 +390,37 @@ class RobustDistributionTracker(nn.Module):
         x = x.detach()
 
         # TODO: this currently only works with gradient checkpointing
-        if self.training and not torch.is_grad_enabled():
-            with torch.no_grad():
+        if self.first_pass:
+            self.first_pass = False
 
-                self.steps += 1.0
-                debiaser = 1 / (1 - self.beta**self.steps)
+            self.steps += 1.0
+            debiaser = self._get_debiaser()
 
-                x = x.view(-1, self.hidden_size)
-                if statistics_mask is not None:
-                    statistics_mask = statistics_mask.view(-1, 1).to(x.dtype).detach()
-                else:
-                    statistics_mask = torch.ones_like(x[:, :1])
+            x = x.view(-1, self.hidden_size)
+            if statistics_mask is not None:
+                statistics_mask = statistics_mask.view(-1, 1).to(x.dtype).detach()
+            else:
+                statistics_mask = torch.ones_like(x[:, :1])
 
-                if self.zero_mean:
-                    new_med = torch.zeros_like(self.med)
-                else:
-                    new_med = robust_mean(
-                        x,
-                        num_iters=self.num_iters,
-                        dim=0,
-                        mask=statistics_mask,
-                        eps=self.eps,
-                    )
-                self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
-                med_debiased = self.med * debiaser
+            if self.zero_mean:
+                new_med = torch.zeros_like(self.med)
+            else:
+                new_med = robust_mean(
+                    x,
+                    num_iters=self.num_iters,
+                    dim=0,
+                    mask=statistics_mask,
+                    eps=self.eps,
+                )
+            self.med.copy_(self.beta * self.med + (1 - self.beta) * new_med)
+            med_debiased = self.med * debiaser
 
-                new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
-                    0
-                ) / statistics_mask.mean(0)
-                self.aad.copy_(self.beta * self.aad + (1 - self.beta) * new_aad)
-                aad_debiased = self.aad * debiaser
+            new_aad = ((x - med_debiased[None]).abs() * statistics_mask).mean(
+                0
+            ) / statistics_mask.mean(0)
+            self.aad.copy_(self.beta * self.aad + (1 - self.beta) * new_aad)
 
-                # assuming that x is gaussian, we scale the AAD to get the STD
-                return med_debiased, aad_debiased / math.sqrt(2 / math.pi)
-
-        debiaser = 1 / (self.eps + (1 - self.beta**self.steps))
+        debiaser = self._get_debiaser()
 
         med_debiased = self.med * debiaser
         aad_debiased = self.aad * debiaser

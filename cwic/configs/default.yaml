@@ -15,7 +15,7 @@ kd_chunk_size: null
 compile: false
 
 mse_weight: 1.0
-max_grad_norm: 1.0
+max_grad_norm: 1000000.0
 
 start_compute_reduction: 1.05
 end_compute_reduction: 8.0
@@ -30,14 +30,14 @@ model:
 
   head_limit: null
 
-  threshold_lr_scale: 100.0
-  threshold_init: 0.001
-  threshold_minimum: 0.001
+  threshold_lr_scale: 10.0
+  threshold_init: 0.01
+  threshold_minimum: 0.01
 
   bandwidth: 0.1
 
   stats_beta: 0.99
-  median_iters: 1
+  median_iters: 3
 
   # _attn_implementation: eager
 
@@ -52,7 +52,7 @@ dataset:
 
 optimizer:
 
-  lr: 1e-5
+  lr: 5e-5
   weight_decay: 0.01
 
   betas: [0.9, 0.95]
