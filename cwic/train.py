@@ -118,7 +118,7 @@ def main(config: omegaconf.DictConfig):
     old_student_model_model = student_model.model
     if config.compile:
         teacher_model.model = torch.compile(teacher_model.model, fullgraph=True)
-        student_model.model = torch.compile(student_model.model, fullgraph=True)
+        student_model.model = torch.compile(student_model.model, fullgraph=False)
         kd_loss_fn = torch.compile(kd_loss_fn, fullgraph=True)
         scaled_mse_fn = torch.compile(scaled_mse_fn, fullgraph=True)
         flop_loss_fn = torch.compile(flop_loss_fn, fullgraph=True)
