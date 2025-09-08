@@ -162,6 +162,8 @@ def main(config: omegaconf.DictConfig):
                     input_ids=batch["input_ids"],
                     use_cache=False,
                 )
+
+            student_model.prepare_tracking()
             student_output = student_model(
                 input_ids=batch["input_ids"],
                 statistics_mask=mask,
@@ -218,6 +220,7 @@ def main(config: omegaconf.DictConfig):
         total_aux["flop_reduction"] = prev_ratio.item()
         total_aux["target_flop_reduction"] = target_ratio
         total_aux["lr"] = lr_scheduler.get_last_lr()[0]
+        total_aux["seen_tokens"] = seen_tokens
 
         grad_nan_to_num(student_model)
         total_aux["grad_norm"] = torch.nn.utils.clip_grad_norm_(
