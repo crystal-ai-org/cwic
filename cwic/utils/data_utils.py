@@ -20,9 +20,10 @@ class TokenCollator:
         input_ids = self.tokenizer(
             texts,
             return_tensors="pt",
-            padding=True,
+            padding="max_length",
             truncation=True,
             max_length=self.max_length,
+            padding_side="right",
         ).input_ids
 
         out = {
