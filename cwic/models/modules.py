@@ -330,24 +330,70 @@ class CWICMLP(nn.Module):
         return y, dense_params, active_params
 
 
+# def step_with_grads(
+#     x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor
+# ) -> Tuple[torch.Tensor, torch.Tensor]:
+
+#     mask = (x_gate > thresholds).to(x.dtype)
+
+#     g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
+#     nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
+
+#     g_mask = attach_gradient(mask, g_kernel)
+#     nog_mask = attach_gradient(mask, nog_kernel)
+
+#     out = attach_gradient(
+#         x.detach() * nog_mask,
+#         x
+#     )
+
+#     return out, g_mask
+
+
+class _StepWithGrads(torch.autograd.Function):
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        x_gate: torch.Tensor,
+        thresholds: torch.Tensor,
+        bandwidth: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        ctx.save_for_backward(x, x_gate, thresholds, bandwidth)
+
+        mask = (x_gate > thresholds).to(x.dtype)
+        
+        return x * mask, mask
+
+
+    @staticmethod
+    def backward(
+        ctx,
+        x_grad: torch.Tensor,
+        mask_grad: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        x, x_gate, thresholds, bandwidth = ctx.saved_tensors
+
+        kernel_grad = ((x_gate - thresholds).abs() < (bandwidth / 2)).to(x.dtype) / bandwidth
+        
+        x_gate_from_mask = kernel_grad * mask_grad
+        thresholds_from_mask = -kernel_grad * mask_grad
+
+        x_from_x = x_grad
+        thresholds_from_x = -kernel_grad * x * x_grad
+
+        thresholds_grad = thresholds_from_mask + thresholds_from_x
+
+        bandwidth_grad = torch.zeros_like(bandwidth)
+
+        return x_from_x, x_gate_from_mask, thresholds_grad, bandwidth_grad
+
+
 def step_with_grads(
     x: torch.Tensor, x_gate: torch.Tensor, thresholds: torch.Tensor, bandwidth: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-
-    mask = (x_gate > thresholds).to(x.dtype)
-
-    g_kernel = F.hardsigmoid(6 * (x_gate - thresholds) / bandwidth)
-    nog_kernel = F.hardsigmoid(6 * (x_gate.detach() - thresholds) / bandwidth)
-
-    g_mask = attach_gradient(mask, g_kernel)
-    nog_mask = attach_gradient(mask, nog_kernel)
-
-    out = attach_gradient(
-        x.detach() * nog_mask,
-        x
-    )
-
-    return out, g_mask
+    return _StepWithGrads.apply(x, x_gate, thresholds, bandwidth)
 
 
 class RobustDistributionTracker(nn.Module):

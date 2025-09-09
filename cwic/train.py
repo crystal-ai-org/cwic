@@ -50,7 +50,7 @@ class NormHook:
 
 @hydra.main(version_base=None, config_path="configs", config_name="default")
 def main(config: omegaconf.DictConfig):
-    logger.info(f"Starting PBit distillation training on device {str(DEVICE)}")
+    logger.info(f"Starting CWIC distillation training on device {str(DEVICE)}")
 
     # Load the teacher model
     teacher_tokenizer = AutoTokenizer.from_pretrained(config.teacher_model)
