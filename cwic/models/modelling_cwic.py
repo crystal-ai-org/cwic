@@ -512,7 +512,6 @@ class CWICModel(CWICPreTrainedModel):
             dense_parameters = dense_parameters + layer_dense_parameters
             active_parameters = active_parameters + layer_active_parameters
 
-        no_norm = hidden_states
         hidden_states = self.norm(hidden_states)
         out = BaseModelOutputWithPastAndActiveParameters(
             last_hidden_state=hidden_states,
@@ -520,7 +519,6 @@ class CWICModel(CWICPreTrainedModel):
             dense_parameters=dense_parameters,
             active_parameters=active_parameters,
         )
-        out.hidden_states_no_norm = no_norm
         return out
 
 
@@ -547,16 +545,21 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             reduction_limit=config.head_limit,
         )
 
-        self.cross_proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
-        self.mse_weight = 0.0
+        self.cross_projections = nn.ModuleDict(
+            {
+                str(i): nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+                for i in config.mse_layers
+            }
+        )
 
         # Initialize weights and apply final processing
         self.post_init()
 
         try:
-            self.cross_proj.weight.data = torch.eye(config.hidden_size)
+            for m in self.cross_projections.values():
+                m.weight.data = torch.eye(config.hidden_size)
         except:
-            logger.warning("Could not initialize cross projection to identity.")
+            logger.warning("Could not initialize cross projections to identity.")
 
     def set_decoder(self, decoder):
         self.model = decoder
@@ -619,16 +622,6 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             hidden_states[:, slice_indices, :],
             statistics_mask=statistics_mask,
         )
-        projected_hidden_states = self.cross_proj(
-            scale_gradient(
-                torch.nn.functional.rms_norm(
-                    outputs.hidden_states_no_norm,
-                    [hidden_states.shape[-1]],
-                    eps=self.config.rms_norm_eps
-                ),
-                self.mse_weight
-            )
-        )
 
         dense_parameters = outputs.dense_parameters + head_dense_parameters
         active_parameters = outputs.active_parameters + head_active_parameters
@@ -649,7 +642,6 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             active_parameters=active_parameters,
             dense_parameters=dense_parameters,
         )
-        out.projected_hidden_states = projected_hidden_states
         return out
 
 

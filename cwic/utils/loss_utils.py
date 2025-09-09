@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.torch_utils import attach_gradient
+from utils.torch_utils import attach_gradient, scale_gradient
 
 
 class KDLossModule(nn.Module):
@@ -69,35 +69,37 @@ def kd_loss_fn(
 
 
 def _kd_loss_fn(student_logits, teacher_logits, mask=None):
-    teacher_logits = teacher_logits.to(student_logits.dtype)
-    mask = mask.to(student_logits.dtype) if mask is not None else None
+    with torch.autocast(str(student_logits.device), enabled=False):
+        student_logits = student_logits.float()
+        teacher_logits = teacher_logits.float()
+        mask = mask.float() if mask is not None else None
 
-    if mask is not None:
-        student_logits = student_logits * mask[..., None]
-        teacher_logits = teacher_logits * mask[..., None]
+        if mask is not None:
+            student_logits = student_logits * mask[..., None]
+            teacher_logits = teacher_logits * mask[..., None]
 
-    student_logits = F.log_softmax(student_logits, dim=-1)
-    teacher_logits = F.log_softmax(teacher_logits, dim=-1)
+        student_logits = F.log_softmax(student_logits, dim=-1)
+        teacher_logits = F.log_softmax(teacher_logits, dim=-1)
 
-    rkl = F.kl_div(
-        input=student_logits,
-        target=teacher_logits,
-        log_target=True,
-        reduction="batchmean",
-    )
-    fkl = F.kl_div(
-        input=teacher_logits,
-        target=student_logits,
-        log_target=True,
-        reduction="batchmean",
-    )
+        rkl = F.kl_div(
+            input=student_logits,
+            target=teacher_logits,
+            log_target=True,
+            reduction="batchmean",
+        )
+        fkl = F.kl_div(
+            input=teacher_logits,
+            target=student_logits,
+            log_target=True,
+            reduction="batchmean",
+        )
 
-    loss = (rkl + fkl) / 2
+        loss = (rkl + fkl) / 2
 
-    if mask is not None:
-        return loss / mask.mean(), rkl / mask.mean(), fkl / mask.mean()
-    else:
-        return loss, rkl, fkl
+        if mask is not None:
+            return loss / mask.mean(), rkl / mask.mean(), fkl / mask.mean()
+        else:
+            return loss, rkl, fkl
 
 
 class MSELossModule(nn.Module):
@@ -109,40 +111,63 @@ class MSELossModule(nn.Module):
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
+        proj: nn.Linear,
+        eps: float = 1e-8,
+        scale: float = 1.0,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        return scaled_mse_fn(pred, target, mask)
+        return scaled_mse_fn(pred, target, proj, eps, scale, mask)
 
 
 def scaled_mse_fn(
     pred: torch.Tensor,
     target: torch.Tensor,
+    proj: nn.Linear,
+    eps: float = 1e-8,
+    scale: float = 1.0,
     mask: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
 
-    pred = pred.view(-1, pred.shape[-1])
-    target = target.view(-1, target.shape[-1]).to(pred.dtype)
-    if mask is not None:
-        mask = mask.view(-1, 1).to(pred.dtype)
-    else:
-        mask = torch.ones_like(pred[..., :1])
-
-    mu = (
-        (target * mask).mean(0)
-        / mask.mean(0)
+    pred = torch.nn.functional.rms_norm(
+        pred, [pred.shape[-1]], eps=eps
     )
-    std = torch.sqrt(
-        ((target - mu).pow(2) * mask).mean(0)
-        / mask.mean(0)
+    target = torch.nn.functional.rms_norm(
+        target, [target.shape[-1]], eps=eps
     )
 
-    pred = (pred - mu[None]) / std[None]
-    target = (target - mu[None]) / std[None]
-
-    return (
-        ((pred - target).pow(2) * mask).mean()
-        / mask.mean()
+    pred = proj(
+        scale_gradient(pred, scale)
     )
+
+    with torch.autocast(str(pred.device), enabled=False):
+        pred = pred.float()
+        target = target.float()
+        if mask is not None:
+            mask = mask.float()
+
+        pred = pred.view(-1, pred.shape[-1])
+        target = target.view(-1, target.shape[-1]).to(pred.dtype)
+        if mask is not None:
+            mask = mask.view(-1, 1).to(pred.dtype)
+        else:
+            mask = torch.ones_like(pred[..., :1])
+
+        mu = (
+            (target * mask).mean(0)
+            / mask.mean(0)
+        )
+        std = torch.sqrt(
+            ((target - mu).pow(2) * mask).mean(0)
+            / mask.mean(0)
+        )
+
+        pred = (pred - mu[None]) / std[None]
+        target = (target - mu[None]) / std[None]
+
+        return (
+            ((pred - target).pow(2) * mask).mean()
+            / mask.mean()
+        )
 
 
 class FlopLossModule(nn.Module):
@@ -175,19 +200,24 @@ def flop_loss_fn(
     mask: Optional[torch.Tensor] = None,
     base_ratio: Optional[torch.Tensor] = None,
 ):
+    with torch.autocast(str(active_params.device), enabled=False):
+        active_params = active_params.float()
+        dense_params = dense_params.float()
+        mask = mask.float() if mask is not None else None
+        base_ratio = base_ratio.float() if base_ratio is not None else None
 
-    if mask is not None:
-        active_per_token = (active_params * mask).sum() / mask.sum()
-        dense_per_token = (dense_params * mask).sum() / mask.sum()
-    else:
-        active_per_token = active_params.mean()
-        dense_per_token = dense_params.mean()
+        if mask is not None:
+            active_per_token = (active_params * mask).sum() / mask.sum()
+            dense_per_token = (dense_params * mask).sum() / mask.sum()
+        else:
+            active_per_token = active_params.mean()
+            dense_per_token = dense_params.mean()
 
-    ratio = dense_per_token / active_per_token
-    if base_ratio is not None:
-        ratio = attach_gradient(base_ratio.detach(), ratio)
+        ratio = dense_per_token / active_per_token
+        if base_ratio is not None:
+            ratio = attach_gradient(base_ratio.detach(), ratio)
 
-    return torch.clip(ratio - target_ratio, max=0) ** 2
+        return torch.clip(ratio - target_ratio, max=0) ** 2
 
 
 def get_total_active(
@@ -195,12 +225,16 @@ def get_total_active(
     dense_params: torch.Tensor,
     mask: Optional[torch.Tensor] = None,
 ):
-    
-    if mask is not None:
-        active = (active_params * mask).sum()
-        dense = (dense_params * mask).sum()
-    else:
-        active = active_params.sum()
-        dense = dense_params.sum()
+    with torch.autocast(str(active_params.device), enabled=False):
+        active_params = active_params.float()
+        dense_params = dense_params.float()
+        mask = mask.float() if mask is not None else None
 
-    return active, dense
+        if mask is not None:
+            active = (active_params * mask).sum()
+            dense = (dense_params * mask).sum()
+        else:
+            active = active_params.sum()
+            dense = dense_params.sum()
+
+        return active, dense

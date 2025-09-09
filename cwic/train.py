@@ -33,19 +33,20 @@ logger = logging.get_logger(__name__)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class NormHook:
+class LayerHook:
     def __init__(self):
         self.last = None
 
     def __call__(self, norm, inp, out):
-        inp = inp[0]
-        inp = torch.nn.functional.rms_norm(
-            inp,
-            [inp.shape[-1]],
-            eps=norm.variance_epsilon,
-        )
-        
-        self.last = inp
+        if isinstance(out, tuple):
+            out = out[0]
+        self.last = out
+
+    def get(self):
+        x = self.last
+        self.last = None
+        return x
+
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="default")
@@ -60,8 +61,6 @@ def main(config: omegaconf.DictConfig):
         config.teacher_model,
         device_map=DEVICE,
     )
-    hidden_states_hook = NormHook()
-    teacher_model.model.norm.register_forward_hook(hidden_states_hook)
     teacher_model.eval()
     logger.info(f"Loaded teacher model {config.teacher_model}!")
 
@@ -75,7 +74,8 @@ def main(config: omegaconf.DictConfig):
     else:
         student_model = llama_to_cwic(
             teacher_model,
-            **config.model
+            **config.model,
+            mse_layers=config.mse_layers,
         )
         logger.info(f"Initialized student model from teacher!")
     # we keep the teacher model in its original format (important for some models)
@@ -83,8 +83,14 @@ def main(config: omegaconf.DictConfig):
     student_model = student_model.to(torch.float32)
     student_model.train()
     student_model.gradient_checkpointing_enable()
-    student_model.mse_weight = config.mse_weight
     logger.info("Student model is ready for training!")
+
+    # add the hooks to capture hidden states
+    teacher_hooks = {i: LayerHook() for i in config.mse_layers}
+    student_hooks = {i: LayerHook() for i in config.mse_layers}
+    for i in config.mse_layers:
+        teacher_model.model.layers[i].register_forward_hook(teacher_hooks[i])
+        student_model.model.layers[i].register_forward_hook(student_hooks[i])
 
     # Load the dataset
     total_batch_size = config.batch_size * config.grad_accum_steps
@@ -157,36 +163,48 @@ def main(config: omegaconf.DictConfig):
             mask = (batch["input_ids"] != teacher_tokenizer.pad_token_id).float()
             seen_tokens += mask.sum().item()
 
-            with torch.no_grad():
-                teacher_output = teacher_model(
+            with torch.autocast(device_type=str(DEVICE), dtype=torch.bfloat16):
+                with torch.no_grad():
+                    teacher_output = teacher_model(
+                        input_ids=batch["input_ids"],
+                        use_cache=False,
+                    )
+
+                student_model.prepare_tracking()
+                student_output = student_model(
                     input_ids=batch["input_ids"],
+                    statistics_mask=mask,
                     use_cache=False,
                 )
 
-            student_model.prepare_tracking()
-            student_output = student_model(
-                input_ids=batch["input_ids"],
-                statistics_mask=mask,
-                use_cache=False,
-            )
+                kl_loss, rkl, fkl = kd_loss_fn(
+                    student_output.logits,
+                    teacher_output.logits,
+                    mask=mask
+                )
+                flop_loss = flop_loss_fn(
+                    student_output.active_parameters,
+                    student_output.dense_parameters,
+                    target_ratio=target_ratio,
+                    mask=mask,
+                    base_ratio=prev_ratio,
+                )
 
-            kl_loss, rkl, fkl = kd_loss_fn(
-                student_output.logits,
-                teacher_output.logits,
-                mask=mask
-            )
-            flop_loss = flop_loss_fn(
-                student_output.active_parameters,
-                student_output.dense_parameters,
-                target_ratio=target_ratio,
-                mask=mask,
-                base_ratio=prev_ratio,
-            )
-            mse_loss = scaled_mse_fn(
-                student_output.projected_hidden_states,
-                hidden_states_hook.last,
-                mask=mask
-            )
+                mse_loss = 0.0
+                for l in config.mse_layers:
+                    
+                    teacher_states = teacher_hooks[l].get()
+                    student_states = student_hooks[l].get()
+
+                    mse_loss = mse_loss + scaled_mse_fn(
+                        student_states,
+                        teacher_states,
+                        student_model.cross_projections[str(l)],
+                        eps=student_model.config.rms_norm_eps,
+                        scale=config.mse_weight,
+                        mask=mask
+                    )
+                mse_loss = mse_loss / len(config.mse_layers)
 
             active, dense = get_total_active(
                 student_output.active_parameters,

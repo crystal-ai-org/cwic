@@ -14,12 +14,14 @@ kd_chunk_size: null
 
 compile: false
 
-mse_weight: 1.0
 max_grad_norm: 1000000.0
 
 start_compute_reduction: 1.05
 end_compute_reduction: 8.0
 compute_reduction_steps: 5000
+
+mse_layers: [5, 8]
+mse_weight: 1.0
 
 checkpoint_interval: 714
 
@@ -30,7 +32,7 @@ model:
 
   head_limit: null
 
-  threshold_lr_scale: 10.0
+  threshold_lr_scale: 1.0
   threshold_init: 0.01
   threshold_minimum: 0.01
 
