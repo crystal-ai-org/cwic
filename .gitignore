@@ -179,6 +179,7 @@ model_code/gpu_ops_build
 outputs
 
 benchmark_data/*
+eval_results/
 data/mmlu
 
 crystal-ai/
