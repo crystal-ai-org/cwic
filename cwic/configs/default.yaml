@@ -32,7 +32,7 @@ model:
 
   head_limit: null
 
-  threshold_lr_scale: 1.0
+  threshold_lr_scale: 10.0
   threshold_init: 0.01
   threshold_minimum: 0.01
 
