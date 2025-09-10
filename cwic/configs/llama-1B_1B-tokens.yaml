@@ -1,0 +1,68 @@
+
+run_name: llama-1B_1B-tokens
+
+wandb_entity: euler-ai
+wandb_project: cwic-iclr-major
+
+teacher_model: meta-llama/Llama-3.2-1B
+student_model: null
+
+max_length: 1024
+batch_size: 16
+grad_accum_steps: 4
+kd_chunk_size: null
+
+compile: true
+
+max_grad_norm: 1.0
+
+start_compute_reduction: 1.05
+end_compute_reduction: 6.05
+compute_reduction_steps: 15000
+
+mse_layers: 7,15
+mse_weight: 1.0
+
+flop_weight: 100.0
+
+checkpoint_interval: 3000
+
+model:
+
+  stripe_size: 512
+  head_stripe_size: 8192
+
+  head_limit: null
+
+  threshold_lr_scale: 1.0
+  threshold_init: 0.01
+  threshold_minimum: 0.01
+
+  bandwidth: 0.1
+
+  stats_beta: 0.99
+  median_iters: 2
+
+
+dataset:
+
+  path: aklein4/fineweb-edu-sample-10BT-llama3
+
+  split: train
+  streaming: true
+
+
+optimizer:
+
+  lr: 5e-5
+  weight_decay: 0.01
+
+  betas: [0.9, 0.95]
+
+
+lr_scheduler:
+
+  name: linear
+
+  num_warmup_steps: 100
+  num_training_steps: 1000000
