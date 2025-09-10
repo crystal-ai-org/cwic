@@ -1,5 +1,4 @@
 
-import logging
 import argparse
 
 from lighteval.logging.evaluation_tracker import EvaluationTracker
@@ -9,23 +8,14 @@ from lighteval.pipeline import ParallelismManager, Pipeline, PipelineParameters
 import models.modelling_cwic
 
 
-logger = logging.getLogger(__name__)
-
-HELP_PANEL_NAME_1 = "Common Parameters"
-HELP_PANEL_NAME_2 = "Logging Parameters"
-HELP_PANEL_NAME_3 = "Debug Parameters"
-HELP_PANEL_NAME_4 = "Modeling Parameters"
-
 ALL_TASKS = [
-    "hellaswag",
-    "winogrande",
-    "piqa",
-    "siqa",
-    "openbookqa",
-    "arc:easy",
-    "arc:challenge",
-    "commonsense_qa",
-    "mmlu"
+    "leaderboard|hellaswag",
+    "custom|winogrande",
+    "lighteval|piqa",
+    "lighteval|openbookqa",
+    "lighteval|arc:easy",
+    "leaderboard|arc:challenge",
+    "custom|mmlu"
 ]
 
 
@@ -53,7 +43,7 @@ def main(args):
 
     tasks = ""
     for t in args.tasks:
-        tasks += f"custom|{t}|0|1,"
+        tasks += f"{t}|0|1,"
     tasks = tasks[:-1]
 
     pipeline = Pipeline(
