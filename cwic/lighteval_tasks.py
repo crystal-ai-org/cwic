@@ -40,21 +40,21 @@ COMMON_SENSE_REASONING_TASKS = lambda: [
         prompt_function=hellaswag_prompt,
         hf_repo="hellaswag",
         hf_subset="default",
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="winogrande",
         prompt_function=winogrande,
         hf_repo="winogrande",
         hf_subset="winogrande_xl",
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="piqa",
         prompt_function=piqa_harness,
         hf_repo="piqa",
         hf_subset="plain_text",
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
         trust_dataset=True,
     ),
     LightevalTaskConfig(
@@ -63,14 +63,14 @@ COMMON_SENSE_REASONING_TASKS = lambda: [
         hf_repo="lighteval/siqa",
         hf_subset="default",
         hf_avail_splits=["train", "validation"],
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="openbookqa",
         prompt_function=openbookqa,
         hf_repo="openbookqa",
         hf_subset="main",
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="arc:easy",
@@ -79,7 +79,7 @@ COMMON_SENSE_REASONING_TASKS = lambda: [
         hf_subset="ARC-Easy",
         evaluation_splits=["test"],
         generation_size=1,
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="arc:challenge",
@@ -88,14 +88,14 @@ COMMON_SENSE_REASONING_TASKS = lambda: [
         hf_subset="ARC-Challenge",
         evaluation_splits=["test"],
         generation_size=1,
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
     LightevalTaskConfig(
         name="commonsense_qa",
         prompt_function=commonsense_qa_prompt,
         hf_repo="commonsense_qa",
         hf_subset="default",
-        metric=[Metrics.loglikelihood_acc_norm],
+        metric=[Metrics.loglikelihood_acc_norm_nospace],
     ),
 ]
 
@@ -146,7 +146,7 @@ MMLU_TASK = lambda: LightevalTaskConfig(
     hf_repo="lighteval/mmlu",
     hf_subset="all",
     evaluation_splits=["test"],
-    metric=[Metrics.loglikelihood_acc_norm],
+    metric=[Metrics.loglikelihood_acc_norm_nospace],
 )
 
 
