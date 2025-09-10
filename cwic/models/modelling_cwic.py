@@ -32,7 +32,7 @@ from cwic.models.outputs import (
     BaseModelOutputWithPastAndActiveParameters,
     CausalLMOutputWithPastAndActiveParameters,
 )
-from utils.torch_utils import scale_gradient
+from utils.misc_utils import str_to_int_list    
 
 
 logger = logging.get_logger(__name__)
@@ -545,10 +545,11 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             reduction_limit=config.head_limit,
         )
 
+        mse_layers = str_to_int_list(config.mse_layers)
         self.cross_projections = nn.ModuleDict(
             {
                 str(i): nn.Linear(config.hidden_size, config.hidden_size, bias=False)
-                for i in config.mse_layers
+                for i in mse_layers
             }
         )
 

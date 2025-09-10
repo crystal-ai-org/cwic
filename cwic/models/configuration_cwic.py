@@ -127,7 +127,9 @@ class CWICConfig(PretrainedConfig):
             The beta value for the CWIC running statistics.
         median_iters (`int`, *optional*, defaults to 3):
             The number of iterations to use for the geometric median in the CWIC running statistics.
-
+        mse_layers (`str`, *optional*, defaults to "5,8"):
+            A comma-separated string of layer indices (0-indexed) to compute the MSE loss between the student and teacher models.
+            
     ```python
     >>> from transformers import CWICModel, CWICConfig
 
@@ -177,6 +179,7 @@ class CWICConfig(PretrainedConfig):
         bandwidth=0.1,
         stats_beta=0.99,
         median_iters=3,
+        mse_layers="5,8",
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -222,6 +225,8 @@ class CWICConfig(PretrainedConfig):
         self.bandwidth = bandwidth
         self.stats_beta = stats_beta
         self.median_iters = median_iters
+
+        self.mse_layers = mse_layers
 
         assert not tie_word_embeddings, "Tying word embeddings is not supported in CWIC models."
 

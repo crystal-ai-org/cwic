@@ -25,6 +25,7 @@ from utils.loss_utils import (
 )
 from utils.torch_utils import grad_nan_to_num
 from models.modelling_cwic import CWICForCausalLM
+from utils.misc_utils import str_to_int_list
 
 
 logger = logging.get_logger(__name__)
@@ -86,9 +87,10 @@ def main(config: omegaconf.DictConfig):
     logger.info("Student model is ready for training!")
 
     # add the hooks to capture hidden states
-    teacher_hooks = {i: LayerHook() for i in config.mse_layers}
-    student_hooks = {i: LayerHook() for i in config.mse_layers}
-    for i in config.mse_layers:
+    mse_layers = str_to_int_list(config.mse_layers)
+    teacher_hooks = {i: LayerHook() for i in mse_layers}
+    student_hooks = {i: LayerHook() for i in mse_layers}
+    for i in mse_layers:
         teacher_model.model.layers[i].register_forward_hook(teacher_hooks[i])
         student_model.model.layers[i].register_forward_hook(student_hooks[i])
 
@@ -191,7 +193,7 @@ def main(config: omegaconf.DictConfig):
                 )
 
                 mse_loss = 0.0
-                for l in config.mse_layers:
+                for l in mse_layers:
                     
                     teacher_states = teacher_hooks[l].get()
                     student_states = student_hooks[l].get()
@@ -204,7 +206,7 @@ def main(config: omegaconf.DictConfig):
                         scale=config.mse_weight,
                         mask=mask
                     )
-                mse_loss = mse_loss / len(config.mse_layers)
+                mse_loss = mse_loss / len(mse_layers)
 
             active, dense = get_total_active(
                 student_output.active_parameters,
