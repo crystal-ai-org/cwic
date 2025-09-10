@@ -218,7 +218,11 @@ def main(config: omegaconf.DictConfig):
             total_active = total_active + active.detach()
             total_dense = total_dense + dense.detach()
 
-            loss = kl_loss + flop_loss + mse_loss
+            loss = (
+                kl_loss +
+                config.flop_weight * flop_loss +
+                mse_loss
+            )
 
             aux = {
                 "loss": loss,

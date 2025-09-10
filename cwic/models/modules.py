@@ -170,6 +170,7 @@ class CWICLinear(GradientCheckpointingLayer):
          - `I`: input features
          - `O`: output features
         """
+        og_dtype = x.dtype
 
         # [I], [I]
         mu, std = self.distribution_tracker(x, statistics_mask=statistics_mask)
@@ -230,8 +231,8 @@ class CWICLinear(GradientCheckpointingLayer):
             y = y[..., : self.og_out_features]
 
         # calculate the parameter usage
-        active_params = self.stripe_size * mask.view(*og_shape, -1).sum(dim=-1)
-        dense_params = self.stripe_size * torch.ones_like(mask).view(*og_shape, -1).sum(dim=-1)
+        active_params = self.stripe_size * mask.view(*og_shape, -1).float().sum(dim=-1)
+        dense_params = self.stripe_size * torch.ones_like(mask).view(*og_shape, -1).float().sum(dim=-1)
 
         if self.reduction_limit is not None:
             mask = statistics_mask.to(active_params.dtype) if statistics_mask is not None else torch.ones_like(active_params)
@@ -246,7 +247,7 @@ class CWICLinear(GradientCheckpointingLayer):
                 active_params,
             )
 
-        return y, dense_params.float(), active_params.float()
+        return y.to(og_dtype), dense_params.float(), active_params.float()
 
 
 class CWICMLP(nn.Module):
