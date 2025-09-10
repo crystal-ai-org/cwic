@@ -11,7 +11,7 @@ from transformers.activations import ACT2FN
 from transformers.pytorch_utils import Conv1D
 from transformers.modeling_layers import GradientCheckpointingLayer
 
-from cwic.utils.torch_utils import attach_gradient
+from cwic.utils.torch_utils import attach_gradient, RecordingModule
 
 
 logger = logging.get_logger(__name__)
@@ -101,6 +101,11 @@ class CWICLinear(GradientCheckpointingLayer):
         self.cached_weight = None
         self.cached_post_mu = None
         self.cached_thresholds = None
+
+        self.mask_hook = RecordingModule()
+
+    def get_mask_handle(self):
+        return self.mask_hook.get_handle()
 
     def _get_weight(self) -> torch.Tensor:
 
@@ -230,6 +235,9 @@ class CWICLinear(GradientCheckpointingLayer):
         if self.og_out_features != self.out_features:
             y = y[..., : self.og_out_features]
 
+        mask = mask.view(*og_shape, self.num_stripes, self.in_features)
+        mask = self.mask_hook(mask)
+
         # calculate the parameter usage
         active_params = self.stripe_size * mask.view(*og_shape, -1).float().sum(dim=-1)
         dense_params = self.stripe_size * torch.ones_like(mask).view(*og_shape, -1).float().sum(dim=-1)
@@ -301,6 +309,11 @@ class CWICMLP(nn.Module):
             inter_features, beta=stats_beta, num_iters=median_iters, eps=eps, zero_mean=True
         )
 
+        self.mask_hook = RecordingModule()
+
+    def get_mask_handle(self):
+        return self.mask_hook.get_handle()
+
     def forward(
         self,
         x: torch.Tensor,
@@ -318,6 +331,7 @@ class CWICMLP(nn.Module):
         bandwidth = (self.bandwidth * rms).view(*[1 for _ in range(x.ndim - 1)], -1) + self.eps
 
         z_masked, mask = step_with_grads(z, z.abs(), thresholds, bandwidth)
+        mask = self.mask_hook(mask)
 
         y = self.down(self.up(x) * z_masked)
 
