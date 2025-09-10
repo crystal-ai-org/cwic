@@ -27,6 +27,24 @@ def expand_to_batch(x, target):
     return x
 
 
+
+class Record:
+    def __init__(self):
+        self.data = None
+    def __call__(self, m, inp, out):
+        self.data = out
+
+class RecordingModule(nn.Module):
+
+    def get_handle(self):
+        handle = Record()
+        self.register_forward_hook(handle)
+        return handle
+
+    def forward(self, x):
+        return x
+
+
 class _ScaleGradient(torch.autograd.Function):
 
     @staticmethod

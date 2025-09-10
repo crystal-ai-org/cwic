@@ -415,6 +415,15 @@ class CWICPreTrainedModel(PreTrainedModel):
             if isinstance(m, RobustDistributionTracker):
                 m.first_pass = True
 
+    @torch.no_grad()
+    def get_mask_handle(self, name):
+        try:
+            module = self.get_submodule(name)
+        except:
+            raise ValueError(f"Module {name} not found in the model.")
+        if not isinstance(module, (CWICLinear, CWICMLP)):
+            raise ValueError(f"Module {name} is not a CWIC module.")
+        return module.get_mask_handle()
 
 
 @auto_docstring
