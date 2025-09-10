@@ -23,6 +23,8 @@ compute_reduction_steps: 5000
 mse_layers: 5,8
 mse_weight: 1.0
 
+flop_weight: 100.0
+
 checkpoint_interval: 714
 
 model:
@@ -46,7 +48,7 @@ model:
 
 dataset:
 
-  path: aklein4/fineweb-edu-sample-10BT-shuffled
+  path: aklein4/fineweb-edu-sample-10BT-llama3
 
   split: train
   streaming: true

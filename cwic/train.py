@@ -16,7 +16,7 @@ from transformers import (
 from transformers.utils import logging
 
 from models.convert import llama_to_cwic
-from utils.data_utils import TokenCollator
+from utils.data_utils import PackedCollator
 from utils.loss_utils import (
     KDLossModule,
     MSELossModule,
@@ -55,9 +55,6 @@ def main(config: omegaconf.DictConfig):
     logger.info(f"Starting CWIC distillation training on device {str(DEVICE)}")
 
     # Load the teacher model
-    teacher_tokenizer = AutoTokenizer.from_pretrained(config.teacher_model)
-    if teacher_tokenizer.pad_token_id is None:
-        teacher_tokenizer.pad_token_id = 0
     teacher_model = LlamaForCausalLM.from_pretrained(
         config.teacher_model,
         device_map=DEVICE,
@@ -94,14 +91,17 @@ def main(config: omegaconf.DictConfig):
         teacher_model.model.layers[i].register_forward_hook(teacher_hooks[i])
         student_model.model.layers[i].register_forward_hook(student_hooks[i])
 
-    # Load the dataset
+    # Load the tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(config.dataset.path)
+
+    # load the dataset
     total_batch_size = config.batch_size * config.grad_accum_steps
     dataset = datasets.load_dataset(**config.dataset)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=total_batch_size,
         shuffle=False,
-        collate_fn=TokenCollator(teacher_tokenizer, config.max_length, DEVICE),
+        collate_fn=PackedCollator(tokenizer, config.max_length, DEVICE),
     )
     logger.info(f"Loaded dataset {config.dataset.path} with batch_size {config.batch_size} and max_length {config.max_length}!")
 
@@ -162,7 +162,7 @@ def main(config: omegaconf.DictConfig):
         total_dense = 0.0
         for batch in mini_batches:
             
-            mask = (batch["input_ids"] != teacher_tokenizer.pad_token_id).float()
+            mask = (batch["input_ids"] != tokenizer.pad_token_id).float()
             seen_tokens += mask.sum().item()
 
             with torch.autocast(device_type=str(DEVICE), dtype=torch.bfloat16):
@@ -170,12 +170,14 @@ def main(config: omegaconf.DictConfig):
                     teacher_output = teacher_model(
                         input_ids=batch["input_ids"],
                         use_cache=False,
+                        attention_mask=batch["attention_mask"],
                     )
 
                 student_model.prepare_tracking()
                 student_output = student_model(
                     input_ids=batch["input_ids"],
                     statistics_mask=mask,
+                    attention_mask=batch["attention_mask"],
                     use_cache=False,
                 )
 
@@ -276,7 +278,7 @@ def main(config: omegaconf.DictConfig):
                 student_model.model = old_student_model_model
 
                 student_model.save_pretrained(ckpt_path)
-                teacher_tokenizer.save_pretrained(ckpt_path)
+                tokenizer.save_pretrained(ckpt_path)
 
                 student_model.model = tmp_model
 
