@@ -41,6 +41,7 @@ class CWICLinear(GradientCheckpointingLayer):
         eps: float = 1e-7,
         do_checkpointing: bool = False,
         reduction_limit: Optional[float] = None,
+        do_project: bool = False,
     ):
         super().__init__()
 
@@ -50,6 +51,7 @@ class CWICLinear(GradientCheckpointingLayer):
         self.eps = eps
         self.do_checkpointing = do_checkpointing
         self.reduction_limit = reduction_limit
+        self.do_project = do_project
 
         # handle stripe sizes
         stripe_size = min(stripe_size, out_features) if stripe_size is not None else out_features
@@ -80,9 +82,17 @@ class CWICLinear(GradientCheckpointingLayer):
 
         # note that this is transposed compared to nn.Linear for inference kernel compatibility
         self.weight = nn.Parameter(torch.randn(in_features, out_features) / (in_features**0.5))
-        self.bias = None
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
+        else:
+            self.register_parameter("bias", None)
+
+        if self.do_project:
+            self.proj = nn.Linear(in_features, in_features, bias=False)
+            nn.init.eye_(self.proj.weight)
+            self.weight.requires_grad_(False)
+        else:
+            self.register_parameter("proj", None)
 
         # when the argument threshold_lr_scale is 1.0, the thresholds move at the same 'speed' as the weights
         self.threshold_lr_scale = threshold_lr_scale * (in_features**0.5)
@@ -109,7 +119,12 @@ class CWICLinear(GradientCheckpointingLayer):
 
     def _get_weight(self) -> torch.Tensor:
 
-        f = lambda x: x.T.view(1, self.num_stripes, self.stripe_size, self.in_features)
+        def f(x):
+            x = x.T.view(1, self.num_stripes, self.stripe_size, self.in_features)
+            if self.do_project:
+                x = self.proj(x)
+            return x
+
 
         if self.training or not self.use_parameter_cache:
             if self.cached_weight is not None:
