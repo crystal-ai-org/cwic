@@ -108,7 +108,6 @@ def main(config: omegaconf.DictConfig):
     # load the optimizer
     training_params = list(student_model.parameters())
     training_params.remove(student_model.model.embed_tokens.weight)
-    training_params.remove(student_model.lm_head.weight)
     optimizer = torch.optim.AdamW(
         training_params,
         **config.optimizer
