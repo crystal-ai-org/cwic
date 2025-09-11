@@ -41,7 +41,6 @@ class CWICLinear(GradientCheckpointingLayer):
         eps: float = 1e-7,
         do_checkpointing: bool = False,
         reduction_limit: Optional[float] = None,
-        do_project: bool = False,
     ):
         super().__init__()
 
@@ -51,7 +50,6 @@ class CWICLinear(GradientCheckpointingLayer):
         self.eps = eps
         self.do_checkpointing = do_checkpointing
         self.reduction_limit = reduction_limit
-        self.do_project = do_project
 
         # handle stripe sizes
         stripe_size = min(stripe_size, out_features) if stripe_size is not None else out_features
@@ -82,17 +80,9 @@ class CWICLinear(GradientCheckpointingLayer):
 
         # note that this is transposed compared to nn.Linear for inference kernel compatibility
         self.weight = nn.Parameter(torch.randn(in_features, out_features) / (in_features**0.5))
+        self.bias = None
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
-        else:
-            self.register_parameter("bias", None)
-
-        if self.do_project:
-            self.proj = nn.Linear(in_features, in_features, bias=False)
-            nn.init.eye_(self.proj.weight)
-            self.weight.requires_grad_(False)
-        else:
-            self.register_parameter("proj", None)
 
         # when the argument threshold_lr_scale is 1.0, the thresholds move at the same 'speed' as the weights
         self.threshold_lr_scale = threshold_lr_scale * (in_features**0.5)
@@ -212,13 +202,8 @@ class CWICLinear(GradientCheckpointingLayer):
                 mask = (x_gate > thresholds).to(x.dtype)
                 x_masked = x_demeaned * mask
 
-            # [B, N, I]
-            x = (x_masked + mu[None, None])
-            if self.do_project:
-                x = self.proj(x)
-
             # [B, N, I, 1]
-            x = x.unsqueeze(-1)
+            x = (x_masked + mu[None, None]).unsqueeze(-1)
 
             # [1, N, S, I]
             w = self._get_weight()
