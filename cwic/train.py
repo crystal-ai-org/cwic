@@ -108,6 +108,7 @@ def main(config: omegaconf.DictConfig):
     # load the optimizer
     training_params = list(student_model.parameters())
     training_params.remove(student_model.model.embed_tokens.weight)
+    training_params.remove(student_model.lm_head.weight)
     optimizer = torch.optim.AdamW(
         training_params,
         **config.optimizer
@@ -276,7 +277,7 @@ def main(config: omegaconf.DictConfig):
             with torch.no_grad():
                 logger.info(f"Saving checkpoint at step {step}...")
 
-                ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}")
+                ckpt_path = os.path.join("checkpoints", config.run_name, f"{step:08}_{target_ratio:.2f}x".replace(".", "p"))
 
                 tmp_model = student_model.model
                 student_model.model = old_student_model_model

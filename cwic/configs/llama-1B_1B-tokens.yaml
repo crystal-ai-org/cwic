@@ -23,15 +23,15 @@ compute_reduction_steps: 15000
 mse_layers: 7,15
 mse_weight: 1.0
 
-flop_weight: 100.0
+flop_weight: 10.0
 
 checkpoint_interval: 3000
 
 model:
 
   stripe_size: 512
-  head_stripe_size: 8192
 
+  head_stripe_size: null
   head_limit: null
 
   threshold_lr_scale: 1.0
@@ -64,5 +64,5 @@ lr_scheduler:
 
   name: linear
 
-  num_warmup_steps: 100
+  num_warmup_steps: 500
   num_training_steps: 1000000

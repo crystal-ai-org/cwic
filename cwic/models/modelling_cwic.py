@@ -550,8 +550,9 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             stats_beta=config.stats_beta,
             median_iters=config.median_iters,
             eps=config.rms_norm_eps,
-            do_checkpointing=True,
+            do_checkpointing=False,
             reduction_limit=config.head_limit,
+            do_project=True,
         )
 
         mse_layers = str_to_int_list(config.mse_layers)
@@ -568,8 +569,9 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
         try:
             for m in self.cross_projections.values():
                 m.weight.data = torch.eye(config.hidden_size)
+            self.lm_head.proj.weight.data = torch.eye(config.hidden_size)
         except:
-            logger.warning("Could not initialize cross projections to identity.")
+            logger.warning("Could not initialize projections to identity.")
 
     def set_decoder(self, decoder):
         self.model = decoder
