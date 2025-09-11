@@ -31,19 +31,8 @@ def get_result_files(base_dir):
     return list(zip(models, last_files))
 
 
-def main():
-    
-    results = {}
-    for model, file in get_result_files(RESULTS_DIR):
-
-        with open(os.path.join(RESULTS_DIR, file), "r") as f:
-            data = json.load(f)
-        
-        curr_results = {
-            benchmark: result["acc_norm"] for benchmark, result in data["results"].items()
-        }
-
-        results[model] = curr_results
+def create_table(ax, all_results, metric):
+    results = all_results[metric]
 
     benchmarks = set(list(results.values())[0].keys())
     for v in results.values():
@@ -73,10 +62,6 @@ def main():
 
     # Convert to numpy array for easier column operations
     data_np = np.array(data)
-
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(len(benchmarks)*1.2 + 2, len(models)*0.6 + 2))
-    ax.axis('off')
 
     # Create table with data
     table = ax.table(
@@ -110,6 +95,39 @@ def main():
     table.set_fontsize(10)
     table.scale(1.2, 1.2)
     table.auto_set_column_width(col=list(range(len(benchmarks))))
+
+    ax.set_title(f'Model Performance Comparison ({metric})', fontsize=14, pad=20)
+
+
+def main():
+    
+    all_results = {}
+    for metric in ["acc_norm", "acc"]:
+
+        results = {}
+        for model, file in get_result_files(RESULTS_DIR):
+
+            with open(os.path.join(RESULTS_DIR, file), "r") as f:
+                data = json.load(f)
+            
+            curr_results = {
+                benchmark: result[metric] for benchmark, result in data["results"].items()
+            }
+
+            results[model] = curr_results
+        
+        all_results[metric] = results
+
+    num_models = len(all_results["acc"])
+    num_benchmarks = len(list(all_results["acc"].values())[0])
+
+    # Create figure and axis
+    fig, ax = plt.subplots(2, 1, figsize=(num_benchmarks*1.2 + 2, num_models*0.6 + 2))
+    for a in ax:
+        a.axis('off')
+
+    create_table(ax[0], all_results, metric="acc")
+    create_table(ax[1], all_results, metric="acc_norm")
 
     plt.tight_layout()
     plt.savefig('model_benchmark_comparison.png', dpi=300, bbox_inches='tight')
