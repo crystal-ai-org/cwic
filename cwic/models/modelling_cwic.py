@@ -552,7 +552,7 @@ class CWICForCausalLM(CWICPreTrainedModel, GenerationMixin):
             eps=config.rms_norm_eps,
             do_checkpointing=True,
             reduction_limit=config.head_limit,
-            do_project=True,
+            do_project=config.freeze_head,
         )
 
         mse_layers = str_to_int_list(config.mse_layers)

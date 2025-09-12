@@ -129,7 +129,9 @@ class CWICConfig(PretrainedConfig):
             The number of iterations to use for the geometric median in the CWIC running statistics.
         mse_layers (`str`, *optional*, defaults to "5,8"):
             A comma-separated string of layer indices (0-indexed) to compute the MSE loss between the student and teacher models.
-            
+        freeze_head (`bool`, *optional*, defaults to True):
+            Whether to freeze the LM head during training.
+
     ```python
     >>> from transformers import CWICModel, CWICConfig
 
@@ -180,6 +182,7 @@ class CWICConfig(PretrainedConfig):
         stats_beta=0.99,
         median_iters=3,
         mse_layers="5,8",
+        freeze_head=True,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -227,6 +230,8 @@ class CWICConfig(PretrainedConfig):
         self.median_iters = median_iters
 
         self.mse_layers = mse_layers
+
+        self.freeze_head = freeze_head
 
         assert not tie_word_embeddings, "Tying word embeddings is not supported in CWIC models."
 
