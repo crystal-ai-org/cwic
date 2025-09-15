@@ -370,9 +370,9 @@ class _StepWithGrads(torch.autograd.Function):
         thresholds: torch.Tensor,
         bandwidth: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        ctx.save_for_backward(x, x_gate, thresholds, bandwidth)
 
         mask = (x_gate > thresholds).to(x.dtype)
+        ctx.save_for_backward(x, x_gate, thresholds, bandwidth, mask)
         
         return x * mask, mask
 
@@ -383,14 +383,14 @@ class _StepWithGrads(torch.autograd.Function):
         x_grad: torch.Tensor,
         mask_grad: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        x, x_gate, thresholds, bandwidth = ctx.saved_tensors
+        x, x_gate, thresholds, bandwidth, mask = ctx.saved_tensors
 
         kernel_grad = ((x_gate - thresholds).abs() < (bandwidth / 2)).to(x.dtype) / bandwidth
         
         x_gate_from_mask = kernel_grad * mask_grad
         thresholds_from_mask = -kernel_grad * mask_grad
 
-        x_from_x = x_grad
+        x_from_x = x_grad * mask
         thresholds_from_x = -kernel_grad * x * x_grad
 
         thresholds_grad = thresholds_from_mask + thresholds_from_x
