@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-RESULTS_DIR = "eval_results/results"
+RESULTS_DIR = "subset_eval_results/results"
 
 
 def get_result_files(base_dir):
@@ -14,15 +14,16 @@ def get_result_files(base_dir):
 
     for root, dirs, files in os.walk(base_dir):
         
-        # Check if this is a leaf directory (no subdirectories)
-        if not dirs and files:
+        if files:
             
             # Sort files alphabetically and get the last one
             last_file = sorted(files)[-1]
             
             # Get the full path
             full_path = os.path.join(os.path.relpath(root, RESULTS_DIR), last_file)
-            last_files.append(full_path)
+            
+            if full_path.endswith(".json"):
+                last_files.append(full_path)
         
     models = [
         "/".join(d.split("/")[:2]) for d in last_files
