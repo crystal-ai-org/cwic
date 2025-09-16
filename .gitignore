@@ -187,6 +187,8 @@ torch_checkpoints/
 
 flop_diagrams/
 
+*.parquet
+
 # pixi environments
 .pixi/*
 !.pixi/config.toml

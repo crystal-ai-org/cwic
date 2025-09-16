@@ -1,0 +1,558 @@
+{
+  "config_general": {
+    "lighteval_sha": "?",
+    "num_fewshot_seeds": 1,
+    "max_samples": 1000,
+    "job_id": 0,
+    "start_time": 1187434.829378705,
+    "end_time": 1187997.674923803,
+    "total_evaluation_time_secondes": "562.8455450979527",
+    "model_name": "../checkpoints/llama-1B_1B-tokens_THAWED-HEAD/00021000_6p05x",
+    "model_sha": "",
+    "model_dtype": null,
+    "model_size": "5.66 GB",
+    "generation_parameters": {
+      "early_stopping": null,
+      "repetition_penalty": null,
+      "frequency_penalty": null,
+      "length_penalty": null,
+      "presence_penalty": null,
+      "max_new_tokens": null,
+      "min_new_tokens": null,
+      "seed": null,
+      "stop_tokens": null,
+      "temperature": null,
+      "top_k": null,
+      "min_p": null,
+      "top_p": null,
+      "truncate_prompt": null,
+      "response_format": null
+    }
+  },
+  "results": {
+    "custom|mmlu|0": {
+      "acc": 0.273,
+      "acc_stderr": 0.01409502286871759,
+      "acc_norm": 0.273,
+      "acc_norm_stderr": 0.01409502286871759
+    },
+    "custom|winogrande|0": {
+      "acc": 0.541,
+      "acc_stderr": 0.01576602573788216,
+      "acc_norm": 0.555,
+      "acc_norm_stderr": 0.015723301886760934
+    },
+    "leaderboard|arc:challenge|0": {
+      "acc": 0.287,
+      "acc_stderr": 0.014312087053809963,
+      "acc_norm": 0.31,
+      "acc_norm_stderr": 0.014632638658632898
+    },
+    "leaderboard|hellaswag|0": {
+      "acc": 0.396,
+      "acc_stderr": 0.015473313265859406,
+      "acc_norm": 0.486,
+      "acc_norm_stderr": 0.01581309754773099
+    },
+    "lighteval|arc:easy|0": {
+      "acc": 0.604,
+      "acc_stderr": 0.015473313265859406,
+      "acc_norm": 0.58,
+      "acc_norm_stderr": 0.015615500115072956
+    },
+    "lighteval|openbookqa|0": {
+      "acc": 0.236,
+      "acc_stderr": 0.019008699622084728,
+      "acc_norm": 0.334,
+      "acc_norm_stderr": 0.021113492347743738
+    },
+    "lighteval|piqa|0": {
+      "acc": 0.66,
+      "acc_stderr": 0.014987482264363937,
+      "acc_norm": 0.678,
+      "acc_norm_stderr": 0.014782913600996685
+    },
+    "all": {
+      "acc": 0.4281428571428571,
+      "acc_stderr": 0.015587992011225313,
+      "acc_norm": 0.45942857142857146,
+      "acc_norm_stderr": 0.015967995289379398
+    }
+  },
+  "versions": {
+    "custom|mmlu|0": 0,
+    "custom|winogrande|0": 0,
+    "leaderboard|arc:challenge|0": 0,
+    "leaderboard|hellaswag|0": 0,
+    "lighteval|arc:easy|0": 0,
+    "lighteval|openbookqa|0": 0,
+    "lighteval|piqa|0": 0
+  },
+  "config_tasks": {
+    "custom|mmlu": {
+      "name": "mmlu",
+      "prompt_function": "mmlu_harness",
+      "hf_repo": "lighteval/mmlu",
+      "hf_subset": "all",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "auxiliary_train",
+        "test",
+        "validation",
+        "dev"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": "dev",
+      "few_shots_select": "sequential",
+      "generation_size": 1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "custom"
+      ],
+      "original_num_docs": 14042,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "custom|winogrande": {
+      "name": "winogrande",
+      "prompt_function": "winogrande",
+      "hf_repo": "winogrande",
+      "hf_subset": "winogrande_xl",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "test",
+        "validation"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "validation"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": "random_sampling",
+      "generation_size": -1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "custom"
+      ],
+      "original_num_docs": 1267,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "leaderboard|arc:challenge": {
+      "name": "arc:challenge",
+      "prompt_function": "arc",
+      "hf_repo": "ai2_arc",
+      "hf_subset": "ARC-Challenge",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "test"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": "random_sampling_from_train",
+      "generation_size": 1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "leaderboard",
+        "arc"
+      ],
+      "original_num_docs": 1172,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "leaderboard|hellaswag": {
+      "name": "hellaswag",
+      "prompt_function": "hellaswag_harness",
+      "hf_repo": "hellaswag",
+      "hf_subset": "default",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "test",
+        "validation"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "validation"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": "random_sampling_from_train",
+      "generation_size": -1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "leaderboard"
+      ],
+      "original_num_docs": 10042,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "lighteval|arc:easy": {
+      "name": "arc:easy",
+      "prompt_function": "arc",
+      "hf_repo": "ai2_arc",
+      "hf_subset": "ARC-Easy",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": "random_sampling_from_train",
+      "generation_size": 1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "lighteval",
+        "arc"
+      ],
+      "original_num_docs": 2376,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "lighteval|openbookqa": {
+      "name": "openbookqa",
+      "prompt_function": "openbookqa",
+      "hf_repo": "openbookqa",
+      "hf_subset": "main",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "test",
+        "validation"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": null,
+      "generation_size": -1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "lighteval"
+      ],
+      "original_num_docs": 500,
+      "effective_num_docs": 500,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    },
+    "lighteval|piqa": {
+      "name": "piqa",
+      "prompt_function": "piqa_harness",
+      "hf_repo": "ybisk/piqa",
+      "hf_subset": "plain_text",
+      "metric": [
+        {
+          "metric_name": "acc",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        },
+        {
+          "metric_name": "acc_norm",
+          "higher_is_better": true,
+          "category": "8",
+          "use_case": "1",
+          "sample_level_fn": "compute",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train",
+        "test",
+        "validation"
+      ],
+      "trust_dataset": true,
+      "evaluation_splits": [
+        "validation"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": null,
+      "generation_size": -1,
+      "generation_grammar": null,
+      "stop_sequence": [
+        "\n"
+      ],
+      "num_samples": null,
+      "suite": [
+        "lighteval"
+      ],
+      "original_num_docs": 1838,
+      "effective_num_docs": 1000,
+      "must_remove_duplicate_docs": false,
+      "version": 0
+    }
+  },
+  "summary_tasks": {
+    "custom|mmlu|0": {
+      "hashes": {
+        "hash_examples": "dcf664447515c58e",
+        "hash_full_prompts": "dcf664447515c58e",
+        "hash_input_tokens": "d8ef3309da4ae357",
+        "hash_cont_tokens": "6d07325c059b9253"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 3996,
+      "non_padded": 4,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "custom|winogrande|0": {
+      "hashes": {
+        "hash_examples": "fed99ea13d2a8553",
+        "hash_full_prompts": "fed99ea13d2a8553",
+        "hash_input_tokens": "2d863a732c5e1584",
+        "hash_cont_tokens": "08ae7256e5c9d0bc"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 2000,
+      "non_padded": 0,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "leaderboard|arc:challenge|0": {
+      "hashes": {
+        "hash_examples": "b726818328851f0f",
+        "hash_full_prompts": "b726818328851f0f",
+        "hash_input_tokens": "e8948f8f3beb478e",
+        "hash_cont_tokens": "3bb6b33234fdfc25"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 3955,
+      "non_padded": 44,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "leaderboard|hellaswag|0": {
+      "hashes": {
+        "hash_examples": "2790438d79fd8c4d",
+        "hash_full_prompts": "2790438d79fd8c4d",
+        "hash_input_tokens": "237c1a28e20f894c",
+        "hash_cont_tokens": "6a5a6e0d1e169fe2"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 3925,
+      "non_padded": 75,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "lighteval|arc:easy|0": {
+      "hashes": {
+        "hash_examples": "1eb0394ca8caeaa6",
+        "hash_full_prompts": "1eb0394ca8caeaa6",
+        "hash_input_tokens": "d33171fc24c91cae",
+        "hash_cont_tokens": "1ecdb6e09aaafa25"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 3891,
+      "non_padded": 108,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "lighteval|openbookqa|0": {
+      "hashes": {
+        "hash_examples": "7bc6716005dd3312",
+        "hash_full_prompts": "7bc6716005dd3312",
+        "hash_input_tokens": "137dda04eec37d5d",
+        "hash_cont_tokens": "d88230131d2b3713"
+      },
+      "truncated": 0,
+      "non_truncated": 500,
+      "padded": 1938,
+      "non_padded": 62,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    },
+    "lighteval|piqa|0": {
+      "hashes": {
+        "hash_examples": "0fbca46b129eb514",
+        "hash_full_prompts": "0fbca46b129eb514",
+        "hash_input_tokens": "700207d92a236b28",
+        "hash_cont_tokens": "7f5db4d84e795816"
+      },
+      "truncated": 0,
+      "non_truncated": 1000,
+      "padded": 1893,
+      "non_padded": 107,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    }
+  },
+  "summary_general": {
+    "hashes": {
+      "hash_examples": "0bc743cf55c89684",
+      "hash_full_prompts": "0bc743cf55c89684",
+      "hash_input_tokens": "853f4d00853f3b2f",
+      "hash_cont_tokens": "79ba4cbb2e25267d"
+    },
+    "truncated": 0,
+    "non_truncated": 6500,
+    "padded": 21598,
+    "non_padded": 400,
+    "num_truncated_few_shots": 0
+  }
+}
