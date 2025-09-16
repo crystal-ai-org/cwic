@@ -43,6 +43,8 @@ model:
   stats_beta: 0.99
   median_iters: 2
 
+  freeze_head: false
+
 
 dataset:
 
